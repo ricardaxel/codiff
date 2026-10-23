@@ -111,7 +111,10 @@ it (`ssh`, mosh, an old tmux session…):
 codiff -r
 ```
 
-Codiff opens that repository as if you had run `codiff --remote devbox:<path>`. While it runs,
+Codiff opens that repository in the window you used last, like `code -r`, as if you had run
+`codiff --remote devbox:<path>` there. It focuses a window that already shows the repository, and
+opens a new window instead when the last-used one holds a plan or review comments you have not
+copied or submitted yet. While it runs,
 Codiff keeps one SSH connection to each listed host and picks up the requests `codiff -r` leaves in
 `~/.codiff/requests` there. It reconnects with backoff when the network drops and right after the
 computer wakes up. A host can only open its own repositories, and `codiff -r` reports when Codiff

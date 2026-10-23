@@ -222,8 +222,8 @@ const runRemoteCommand = (remote, argv, input) =>
     const stdout = [];
     /** @type {Array<Buffer>} */
     const stderr = [];
-    child.stdout.on('data', (chunk) => stdout.push(chunk));
-    child.stderr.on('data', (chunk) => stderr.push(chunk));
+    child.stdout?.on('data', (chunk) => stdout.push(chunk));
+    child.stderr?.on('data', (chunk) => stderr.push(chunk));
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) {

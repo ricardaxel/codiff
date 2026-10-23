@@ -9,7 +9,9 @@ import { beforeEach, expect, test, vi } from 'vite-plus/test';
 import { useReviewCommentDrafts } from '../app/hooks/useReviewCommentDrafts.ts';
 import { useReviewFileState } from '../app/hooks/useReviewState.ts';
 import type { ReviewComment, ReviewIdentity } from '../lib/app-types.ts';
-import { workerHighlighterOptions } from '../lib/code-view-options.ts';
+import { getWorkerHighlighterOptions } from '../lib/code-view-options.ts';
+
+const workerHighlighterOptions = getWorkerHighlighterOptions('highlights');
 import {
   getWalkthroughReviewIdentity,
   updateReviewIdentityCollapsed,

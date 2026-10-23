@@ -96,6 +96,30 @@ so authenticate with keys or an agent; password prompts are not supported. Conne
 for five minutes. Set `CODIFF_SSH_PATH` to use another `ssh` executable. Walkthroughs, the review
 assistant, sharing and opening files in an editor are not available for remote repositories yet.
 
+You can also start from the other machine. Install the remote helper once from the machine that
+runs Codiff:
+
+```bash
+codiff --install-remote-helper devbox
+```
+
+This copies a small `codiff` script to `~/.local/bin` on `devbox` and adds `devbox` to
+`settings.remoteHelperHosts`. Then run this in a repository on `devbox`, however you connected to
+it (`ssh`, mosh, an old tmux session…):
+
+```bash
+codiff -r
+```
+
+Codiff opens that repository in the window you used last, like `code -r`, as if you had run
+`codiff --remote devbox:<path>` there. It focuses a window that already shows the repository, and
+opens a new window instead when the last-used one holds a plan or review comments you have not
+copied or submitted yet. While it runs,
+Codiff keeps one SSH connection to each listed host and picks up the requests `codiff -r` leaves in
+`~/.codiff/requests` there. It reconnects with backoff when the network drops and right after the
+computer wakes up. A host can only open its own repositories, and `codiff -r` reports when Codiff
+is not connected instead of leaving the request for later.
+
 Show all available options:
 
 ```bash
@@ -148,6 +172,18 @@ is running so changes apply to open windows.
 Set `settings.showWhitespace` to `true` to show whitespace-only changes in diffs and file line
 counts; when it is `false`, Codiff hides those changes from the working-tree review state.
 
+Set `settings.showUntracked` to `false`, choose `View > Diff > Show Untracked Files`, or use Toggle
+Untracked Files in the command bar to hide untracked files from working-tree reviews. The setting is
+independent of Git's `status.showUntrackedFiles`.
+
+Codiff highlights syntax with a fast engine that covers the most common languages. Languages it
+lacks, such as D, would show as plain text, so with `settings.syntaxHighlighter` set to `auto` (the
+default) a window switches to [Shiki](https://shiki.style/), which colors almost every language but
+is slower, whenever its review contains such a file. Set it to `highlights` to always use the fast
+engine or `shiki` to always use Shiki, from the config file, `View > Diff > Syntax Highlighting`, or
+Change Syntax Highlighting in the command bar. Shiki currently uses the GitHub Light and Dark
+themes.
+
 ```jsonc
 {
   "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json",
@@ -164,6 +200,8 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "openAIReasoningEffort": "",
     "opencodeModel": "opencode-default",
     "sidebarPosition": "left",
+    "syntaxHighlighter": "auto",
+    "showUntracked": true,
     "showWhitespace": false,
     "theme": "system",
     "walkthroughPrompt": "",

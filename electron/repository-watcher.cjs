@@ -118,10 +118,22 @@ const readRepositoryWatcherPathState = async (repoRoot, path, exact, stat) => {
  * @param {string} repoRoot
  * @param {Iterable<string>} [exactPaths]
  * @param {Iterable<string>} [knownDirtyPaths]
+ * @param {{showUntracked?: boolean}} [options] Hidden untracked files are not watched.
  */
-const readRepositoryWatcherSnapshot = async (repoRoot, exactPaths = [], knownDirtyPaths = []) => {
+const readRepositoryWatcherSnapshot = async (
+  repoRoot,
+  exactPaths = [],
+  knownDirtyPaths = [],
+  options = {},
+) => {
   const knownDirtyPathSet = new Set(knownDirtyPaths);
-  const statusArgs = ['status', '--porcelain=v2', '--branch', '-z', '-uall'];
+  const statusArgs = [
+    'status',
+    '--porcelain=v2',
+    '--branch',
+    '-z',
+    options.showUntracked === false ? '-uno' : '-uall',
+  ];
   // Git status hashes modified tracked files. Known dirty paths are monitored
   // through metadata instead, while this command discovers all new changes.
   if (knownDirtyPathSet.size > 0) {

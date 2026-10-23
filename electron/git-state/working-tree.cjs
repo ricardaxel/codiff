@@ -212,7 +212,7 @@ const listUntrackedItems = async (repoRoot) => {
 
 /**
  * @param {string} launchPath
- * @param {{eagerContents?: boolean; showWhitespace?: boolean}} [options]
+ * @param {{eagerContents?: boolean; showUntracked?: boolean; showWhitespace?: boolean}} [options]
  * @returns {Promise<RepositoryState>}
  */
 const readWorkingTreeState = async (launchPath, options = {}) => {
@@ -220,7 +220,9 @@ const readWorkingTreeState = async (launchPath, options = {}) => {
   const shouldUsePatchOnly = options.eagerContents === false;
   const [trackedStatus, untrackedItems, stagedPatches, unstagedPatches] = await Promise.all([
     git(repoRoot, ['status', '--porcelain=v1', '-z', '-uno']),
-    listUntrackedItems(repoRoot),
+    // Codiff's own setting decides, so its toggle works even when Git's
+    // status.showUntrackedFiles hides untracked files from `git status`.
+    options.showUntracked === false ? [] : listUntrackedItems(repoRoot),
     shouldUsePatchOnly ? readPatchMap(repoRoot, 'staged', options) : new Map(),
     shouldUsePatchOnly ? readPatchMap(repoRoot, 'unstaged', options) : new Map(),
   ]);

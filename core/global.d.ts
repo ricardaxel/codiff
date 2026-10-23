@@ -1,5 +1,5 @@
 import type { NativeKeyboardLayout } from './config/keyboard-layout.ts';
-import type { CodiffConfig } from './config/types.ts';
+import type { CodiffConfig, CodiffSyntaxHighlighter } from './config/types.ts';
 import type {
   AgentSkillStatus,
   CodiffFeatureFlags,
@@ -118,6 +118,8 @@ declare global {
       saveRepositoryFile: (request: SaveRepositoryFileRequest) => Promise<SaveRepositoryFileResult>;
       setDiffStyle: (value: CodiffPreferences['diffStyle']) => Promise<void>;
       setShowOutdated: (value: boolean) => Promise<void>;
+      setShowUntracked: (value: boolean) => Promise<void>;
+      setSyntaxHighlighter: (value: CodiffSyntaxHighlighter) => Promise<void>;
       setWordWrap: (value: boolean) => Promise<void>;
       sharePlan: (review: PlanReview) => Promise<SharePlanResult>;
       shareWalkthrough: (snapshot: SharedWalkthroughSnapshot) => Promise<ShareWalkthroughResult>;

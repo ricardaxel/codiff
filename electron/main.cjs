@@ -12,6 +12,7 @@ const {
   ipcMain,
   Menu,
   nativeTheme,
+  powerMonitor,
   screen,
   shell,
 } = require('electron');
@@ -114,7 +115,12 @@ const {
   writeMarkdownDocument,
 } = require('./markdown-document.cjs');
 const { readRepositoryFile, writeRepositoryFile } = require('./repository-file.cjs');
-const { isRemoteRepositoryPath, resolveRepositoryPath } = require('./remote-repository.cjs');
+const { createRemoteHelperWatcher } = require('./remote-helper.cjs');
+const {
+  formatRemoteRepositoryPath,
+  isRemoteRepositoryPath,
+  resolveRepositoryPath,
+} = require('./remote-repository.cjs');
 const {
   createRepositoryWatcherCoordinator,
   readRepositoryWatcherSnapshot,
@@ -127,6 +133,7 @@ const { createWalkthroughProgressReporter } = require('./walkthrough-progress.cj
  * @typedef {import('../core/config/types.ts').CodiffConfig} CodiffConfig
  * @typedef {import('../core/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
  * @typedef {import('../core/types.ts').CodiffTheme} CodiffTheme
+ * @typedef {import('../core/types.ts').RepositoryState} RepositoryState
  * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
  * @typedef {{key: string; repositoryRoot: string; sourceKey: string}} WindowIdentity
  * @typedef {{direction: string; name: string; owner: string; repo: string}} GitHubRemote
@@ -146,6 +153,10 @@ const windowRepositories = new Map();
 const windowLaunchOptions = new Map();
 /** @type {Map<number, Promise<RepositoryState>>} */
 const windowInitialRepositoryStates = new Map();
+// Unlike the initial state, this is kept after the renderer reads it so every
+// reload can restore the window title of the repository the window now shows.
+/** @type {Map<number, Promise<RepositoryState>>} */
+const windowTitleRepositoryStates = new Map();
 /** @type {Map<number, number>} */
 const walkthroughProgressGenerations = new Map();
 /** @type {Map<number, string>} */
@@ -202,6 +213,7 @@ const getActiveAgent = () => getEnabledAgent(config.settings.agentBackend);
 /** @param {string} repositoryPath @param {ReviewSource} [source] */
 const readRepositoryStateWithConfig = (repositoryPath, source) =>
   readRepositoryState(repositoryPath, source, {
+    showUntracked: config.settings.showUntracked,
     showWhitespace: config.settings.showWhitespace,
   });
 
@@ -209,6 +221,7 @@ const readRepositoryStateWithConfig = (repositoryPath, source) =>
 const readInitialRepositoryStateWithConfig = (repositoryPath, launchOptions) =>
   launchOptions.walkthrough && !launchOptions.walkthroughFile
     ? readWalkthroughRepositoryState(repositoryPath, launchOptions.source, {
+        showUntracked: config.settings.showUntracked,
         showWhitespace: config.settings.showWhitespace,
       })
     : readRepositoryStateWithConfig(repositoryPath, launchOptions.source);
@@ -507,7 +520,9 @@ const readSafeRepositoryWatcherSnapshot = async (
   knownDirtyPaths = [],
 ) => {
   try {
-    return await readRepositoryWatcherSnapshot(repositoryRoot, exactPaths, knownDirtyPaths);
+    return await readRepositoryWatcherSnapshot(repositoryRoot, exactPaths, knownDirtyPaths, {
+      showUntracked: config.settings.showUntracked,
+    });
   } catch (error) {
     return {
       head: `error:${error instanceof Error ? error.message : String(error)}`,
@@ -606,6 +621,22 @@ const buildModelSubmenu = () => {
     type: 'radio',
   }));
 };
+
+// `codiff -r` on a machine listed in settings.remoteHelperHosts opens its
+// repository here. Codiff keeps an SSH connection to each of those machines.
+const remoteHelperWatcher = createRemoteHelperWatcher({
+  onOpen: async (host, path) => {
+    await openInLastUsedWindow(formatRemoteRepositoryPath({ destination: host, path }), {
+      repositoryPathProvided: true,
+      walkthrough: false,
+    });
+  },
+  onStatusChange: (host, status) => {
+    if (!status.connected && status.lastError) {
+      console.warn(`Codiff remote helper for ${host} disconnected: ${status.lastError}`);
+    }
+  },
+});
 
 const loadCodexModels = () => {
   codexModelDiscovery ??= readCodexModels({ signal: codexModelDiscoveryAbort.signal })
@@ -845,6 +876,30 @@ const buildApplicationMenu = () =>
                 type: 'checkbox',
               },
               {
+                checked: config.settings.showUntracked,
+                click: (menuItem) => {
+                  updateConfig({
+                    settings: { ...config.settings, showUntracked: menuItem.checked },
+                  });
+                },
+                label: 'Show Untracked Files',
+                type: 'checkbox',
+              },
+              {
+                label: 'Syntax Highlighting',
+                submenu: /** @type {const} */ ([
+                  ['auto', 'Automatic'],
+                  ['highlights', 'Fast'],
+                  ['shiki', 'Shiki (More Languages)'],
+                ]).map(([value, label]) => ({
+                  checked: config.settings.syntaxHighlighter === value,
+                  click: () =>
+                    updateConfig({ settings: { ...config.settings, syntaxHighlighter: value } }),
+                  label,
+                  type: /** @type {const} */ ('radio'),
+                })),
+              },
+              {
                 checked: config.settings.expandUnchanged,
                 click: (menuItem) => {
                   updateConfig({
@@ -963,6 +1018,70 @@ ipcMain.on(
 );
 
 /**
+ * Point a window at a repository: record what it shows, start reading the
+ * repository and watch the working tree. The renderer picks this up on load.
+ *
+ * @param {import('electron').BrowserWindow} window
+ * @param {string} repositoryPath
+ * @param {CodiffLaunchOptions} launchOptions
+ * @param {WindowIdentity | null} identity
+ */
+const initializeWindowRepository = (window, repositoryPath, launchOptions, identity) => {
+  const webContentsId = window.webContents.id;
+  if (identity) {
+    windowIdentities.set(webContentsId, identity);
+  }
+  windowRepositories.set(webContentsId, identity?.repositoryRoot || repositoryPath);
+  windowLaunchOptions.set(webContentsId, launchOptions);
+  const initialRepositoryStatePromise = launchOptions.planFile
+    ? null
+    : readInitialRepositoryStateWithConfig(repositoryPath, launchOptions);
+  const initialRepositoryState = initialRepositoryStatePromise?.then((state) => {
+    if (!window.isDestroyed()) {
+      storeResolvedRepositoryState(webContentsId, state);
+    }
+    return state;
+  });
+  initialRepositoryState?.catch(() => {});
+  if (initialRepositoryState) {
+    windowInitialRepositoryStates.set(webContentsId, initialRepositoryState);
+    windowTitleRepositoryStates.set(webContentsId, initialRepositoryState);
+  } else {
+    windowTitleRepositoryStates.delete(webContentsId);
+  }
+  if (
+    !launchOptions.planFile &&
+    (!launchOptions.source ||
+      launchOptions.source.type === 'branch' ||
+      launchOptions.source.type === 'branch-working-tree')
+  ) {
+    void initialRepositoryState
+      .then((state) => {
+        if (
+          (state.source.type === 'working-tree' || state.source.type === 'branch-working-tree') &&
+          !window.isDestroyed()
+        ) {
+          startRepositoryWatcher(window, state.root);
+        }
+      })
+      .catch(() => {});
+  }
+};
+
+/** @type {number | null} */
+let lastFocusedWebContentsId = null;
+
+const getLastUsedWindow = () => {
+  const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed());
+  return (
+    BrowserWindow.getFocusedWindow() ??
+    windows.find((window) => window.webContents.id === lastFocusedWebContentsId) ??
+    windows.at(-1) ??
+    null
+  );
+};
+
+/**
  * @param {string} repositoryPath
  * @param {CodiffLaunchOptions} [launchOptions]
  * @param {WindowIdentity | null} [identity]
@@ -1026,46 +1145,15 @@ const createWindow = (
     createWindowRevealController(window, useStartupOpacity),
   );
   openWindows.add(window);
-  if (identity) {
-    windowIdentities.set(webContentsId, identity);
-  }
-  windowRepositories.set(webContentsId, identity?.repositoryRoot || repositoryPath);
-  windowLaunchOptions.set(webContentsId, launchOptions);
-  const initialRepositoryStatePromise = launchOptions.planFile
-    ? null
-    : readInitialRepositoryStateWithConfig(repositoryPath, launchOptions);
-  const initialRepositoryState = initialRepositoryStatePromise?.then((state) => {
-    if (!window.isDestroyed()) {
-      storeResolvedRepositoryState(webContentsId, state);
-    }
-    return state;
-  });
-  initialRepositoryState?.catch(() => {});
-  if (initialRepositoryState) {
-    windowInitialRepositoryStates.set(webContentsId, initialRepositoryState);
-  }
-  if (
-    !launchOptions.planFile &&
-    (!launchOptions.source ||
-      launchOptions.source.type === 'branch' ||
-      launchOptions.source.type === 'branch-working-tree')
-  ) {
-    void initialRepositoryState
-      .then((state) => {
-        if (
-          (state.source.type === 'working-tree' || state.source.type === 'branch-working-tree') &&
-          !window.isDestroyed()
-        ) {
-          startRepositoryWatcher(window, state.root);
-        }
-      })
-      .catch(() => {});
-  }
+  initializeWindowRepository(window, repositoryPath, launchOptions, identity);
   window.on('blur', () => repositoryWatcherCoordinator.visibilityChanged(webContentsId));
   window.on('enter-full-screen', () => {
     window.webContents.send('codiff:windowFullScreenChanged', true);
   });
-  window.on('focus', () => repositoryWatcherCoordinator.focus(webContentsId));
+  window.on('focus', () => {
+    lastFocusedWebContentsId = webContentsId;
+    repositoryWatcherCoordinator.focus(webContentsId);
+  });
   window.on('hide', () => repositoryWatcherCoordinator.visibilityChanged(webContentsId));
   window.on('leave-full-screen', () => {
     window.webContents.send('codiff:windowFullScreenChanged', false);
@@ -1136,6 +1224,9 @@ const createWindow = (
   });
   window.on('closed', () => {
     openWindows.delete(window);
+    if (lastFocusedWebContentsId === webContentsId) {
+      lastFocusedWebContentsId = null;
+    }
     definitionSearchCoordinator.cancel(webContentsId);
     repositoryWatcherCoordinator.detach(webContentsId);
     clearMarkdownDocumentWatchers(webContentsId);
@@ -1145,6 +1236,7 @@ const createWindow = (
     windowIdentities.delete(webContentsId);
     windowRevealControllers.delete(webContentsId);
     windowInitialRepositoryStates.delete(webContentsId);
+    windowTitleRepositoryStates.delete(webContentsId);
     walkthroughProgressGenerations.delete(webContentsId);
     windowRepositories.delete(webContentsId);
     windowLaunchOptions.delete(webContentsId);
@@ -1166,7 +1258,10 @@ const createWindow = (
     if (!currentLaunchOptions?.planFile) {
       // The renderer's static HTML title can replace the title set while repository state loads.
       // Reapply the resolved title after every navigation so the native window list stays useful.
-      void restoreRepositoryWindowTitleAfterLoad(window, initialRepositoryState).catch(() => {});
+      void restoreRepositoryWindowTitleAfterLoad(
+        window,
+        windowTitleRepositoryStates.get(webContentsId),
+      ).catch(() => {});
       return;
     }
     // The renderer's static HTML title replaces constructor titles during navigation.
@@ -1326,6 +1421,39 @@ const focusOrCreateWindow = (
   }
 
   return createWindow(repositoryPath, launchOptions, identity);
+};
+
+/**
+ * Open a repository in the last-used window, like `code -r`. A window already
+ * showing it is focused instead, and a new window opens when the last-used one
+ * holds a plan or review comments that would be lost.
+ *
+ * @param {string} repositoryPath
+ * @param {CodiffLaunchOptions} launchOptions
+ */
+const openInLastUsedWindow = async (repositoryPath, launchOptions) => {
+  const identity = getWindowIdentity(repositoryPath, launchOptions);
+  const window = getLastUsedWindow();
+  if (
+    !window ||
+    findMatchingWindowIdentity(identity, windowIdentities) != null ||
+    windowLaunchOptions.get(window.webContents.id)?.planFile ||
+    (await pendingCommentsClipboardController.requestPendingCommentsMarkdown(window)) ||
+    window.isDestroyed()
+  ) {
+    return focusOrCreateWindow(repositoryPath, launchOptions);
+  }
+
+  const webContentsId = window.webContents.id;
+  definitionSearchCoordinator.cancel(webContentsId);
+  repositoryWatcherCoordinator.detach(webContentsId);
+  clearMarkdownDocumentWatchers(webContentsId);
+  walkthroughProgressGenerations.delete(webContentsId);
+  windowIdentities.delete(webContentsId);
+  initializeWindowRepository(window, repositoryPath, launchOptions, identity);
+  window.reload();
+  focusWindow(window);
+  return window;
 };
 
 const INITIAL_UPDATE_CHECK_DELAY_MS = 10 * 1000;
@@ -1496,10 +1624,17 @@ if (squirrelStartup || !lock) {
       sendConfigChanged();
       Menu.setApplicationMenu(buildApplicationMenu());
       if (previousAgent !== 'codex' && getActiveAgent()?.id === 'codex') void loadCodexModels();
+      remoteHelperWatcher.update(config.settings.remoteHelperHosts);
     });
+    remoteHelperWatcher.update(config.settings.remoteHelperHosts);
+    // Network connections rarely survive sleep; reconnect instead of waiting for a timeout.
+    powerMonitor.on('resume', () => remoteHelperWatcher.reconnect());
   });
 
-  app.on('will-quit', () => codexModelDiscoveryAbort.abort());
+  app.on('will-quit', () => {
+    codexModelDiscoveryAbort.abort();
+    remoteHelperWatcher.close();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -2043,6 +2178,19 @@ ipcMain.handle('codiff:setDiffStyle', (_event, value) => {
 
 ipcMain.handle('codiff:setShowOutdated', (_event, value) => {
   updateConfig({ settings: { ...config.settings, showOutdated: Boolean(value) } });
+});
+
+ipcMain.handle('codiff:setSyntaxHighlighter', (_event, value) => {
+  updateConfig({
+    settings: {
+      ...config.settings,
+      syntaxHighlighter: value === 'highlights' || value === 'shiki' ? value : 'auto',
+    },
+  });
+});
+
+ipcMain.handle('codiff:setShowUntracked', (_event, value) => {
+  updateConfig({ settings: { ...config.settings, showUntracked: Boolean(value) } });
 });
 
 ipcMain.handle('codiff:setWordWrap', (_event, value) => {

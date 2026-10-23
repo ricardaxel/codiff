@@ -166,6 +166,20 @@ const normalizeAgentBackend = (backend) =>
     ? backend
     : 'codex';
 
+/**
+ * SSH host aliases allowed for the remote helper. They name socket files, so
+ * only plain host characters (and `user@`) are accepted.
+ *
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+const isRemoteHelperHost = (value) =>
+  typeof value === 'string' && /^[A-Za-z0-9_][A-Za-z0-9._@-]{0,63}$/u.test(value);
+
+/** @param {unknown} hosts @returns {Array<string>} */
+const normalizeRemoteHelperHosts = (hosts) =>
+  Array.isArray(hosts) ? [...new Set(hosts.filter(isRemoteHelperHost))] : [];
+
 /** @param {unknown} family @returns {string} */
 const normalizeCodeFontFamily = (family) => (typeof family === 'string' ? family.trim() : '');
 
@@ -323,6 +337,7 @@ const mergeConfig = (raw) => {
           : defaults.settings.opencodeModel,
       piModel:
         typeof rawSettings.piModel === 'string' ? rawSettings.piModel : defaults.settings.piModel,
+      remoteHelperHosts: normalizeRemoteHelperHosts(rawSettings.remoteHelperHosts),
       renderMarkdownAs: rawSettings.renderMarkdownAs === 'source' ? 'source' : 'preview',
       reviewCommentsPrefix:
         typeof rawSettings.reviewCommentsPrefix === 'string'
@@ -333,10 +348,18 @@ const mergeConfig = (raw) => {
         typeof rawSettings.showOutdated === 'boolean'
           ? rawSettings.showOutdated
           : defaults.settings.showOutdated,
+      showUntracked:
+        typeof rawSettings.showUntracked === 'boolean'
+          ? rawSettings.showUntracked
+          : defaults.settings.showUntracked,
       showWhitespace:
         typeof rawSettings.showWhitespace === 'boolean'
           ? rawSettings.showWhitespace
           : defaults.settings.showWhitespace,
+      syntaxHighlighter:
+        rawSettings.syntaxHighlighter === 'highlights' || rawSettings.syntaxHighlighter === 'shiki'
+          ? rawSettings.syntaxHighlighter
+          : 'auto',
       theme: normalizeTheme(rawSettings.theme),
       walkthroughPrompt:
         typeof rawSettings.walkthroughPrompt === 'string'
@@ -499,6 +522,7 @@ module.exports = {
   createDefaultConfig,
   getConfigPath,
   initConfig,
+  isRemoteHelperHost,
   migrateFromPreferences,
   normalizeCodeFontFamily,
   normalizeCodeFontSize,

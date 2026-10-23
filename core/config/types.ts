@@ -1,5 +1,7 @@
 export type CodiffDiffStyle = 'split' | 'unified';
 export type CodiffTheme = 'system' | 'light' | 'dark';
+// 'auto' uses the fast highlighter unless a file needs a language only Shiki has.
+export type CodiffSyntaxHighlighter = 'auto' | 'highlights' | 'shiki';
 export type CodiffAgentId = 'codex' | 'claude' | 'opencode' | 'pi';
 // 'none' turns off every AI feature: walkthroughs, the review assistant and agent skills.
 export type CodiffAgentBackend = CodiffAgentId | 'none';
@@ -19,11 +21,14 @@ export type CodiffSettings = {
   openAIReasoningEffort: string;
   opencodeModel: string;
   piModel: string;
+  remoteHelperHosts: ReadonlyArray<string>;
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
   showOutdated: boolean;
+  showUntracked: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';
+  syntaxHighlighter: CodiffSyntaxHighlighter;
   theme: CodiffTheme;
   walkthroughPrompt: string;
   wordWrap: boolean;

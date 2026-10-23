@@ -75,7 +75,9 @@ import {
   diffContextExpansionLineCount,
   getCodeViewWorkerPoolOptions,
   sectionLabel,
-  workerHighlighterOptions,
+  getCodeViewThemes,
+  getWorkerHighlighterOptions,
+  type CodeViewHighlighter,
 } from '../../lib/code-view-options.ts';
 import {
   canRenderImagePreview,
@@ -2578,7 +2580,7 @@ const getHunkSelectionRange = (
 const isSameSelection = (a: SelectedLineRange, b: SelectedLineRange) =>
   a.start === b.start && a.end === b.end && a.side === b.side;
 
-export function ReviewCodeView({
+function ReviewCodeViewContent({
   activeSearchMatch,
   agentId,
   agentLabel,
@@ -2600,6 +2602,7 @@ export function ReviewCodeView({
   focusCommentRequest,
   forceExpandedPaths,
   gitIdentity,
+  highlighter,
   hunkNavigation,
   initialMarkdownPreviewSectionIds = emptyMarkdownPreviewSectionIds,
   isReadOnly = false,
@@ -2666,6 +2669,7 @@ export function ReviewCodeView({
   focusCommentRequest: number;
   forceExpandedPaths: ReadonlySet<string>;
   gitIdentity: GitIdentity | null;
+  highlighter: CodeViewHighlighter;
   hunkNavigation: HunkNavigationRequest | null;
   initialMarkdownPreviewSectionIds?: ReadonlySet<string>;
   isReadOnly?: boolean;
@@ -3815,19 +3819,17 @@ export function ReviewCodeView({
         },
         overflow: wordWrap ? 'wrap' : 'scroll',
         parseDiffOptions: getDiffParseOptions(showWhitespace),
-        preferredHighlighter: workerHighlighterOptions.preferredHighlighter,
+        preferredHighlighter: highlighter,
         stickyHeaders: true,
-        theme: {
-          dark: 'Dunkel',
-          light: 'Licht',
-        },
+        theme: getCodeViewThemes(highlighter),
         themeType: theme,
         tokenizeMaxLength: 100_000,
         unsafeCSS: codeViewUnsafeCSS,
-        useTokenTransformer: workerHighlighterOptions.useTokenTransformer,
+        useTokenTransformer: true,
       }) satisfies CodeViewOptions<ReviewAnnotationMetadata, undefined>,
     [
       bottomInset,
+      highlighter,
       cancelPendingEmptyCommentDeletes,
       createCommentForRange,
       diffStyle,
@@ -4046,6 +4048,10 @@ export function ReviewCodeView({
   }, [itemMetadata, items, sourceKey]);
 
   const workerPoolOptions = useMemo(() => getCodeViewWorkerPoolOptions(), []);
+  const workerHighlighterOptions = useMemo(
+    () => getWorkerHighlighterOptions(highlighter),
+    [highlighter],
+  );
 
   const requestScrollTargetIntoView = useCallback(
     (
@@ -5065,5 +5071,26 @@ export function ReviewCodeView({
         />
       ) : null}
     </>
+  );
+}
+
+type ReviewCodeViewContentProps = ComponentProps<typeof ReviewCodeViewContent>;
+
+/**
+ * Diffs mount only once the window's syntax highlighting engine is known
+ * (`highlighter` is `null` while it is chosen or switched), so their mount-time
+ * work, such as focusing a linked comment or restoring the scroll position,
+ * always runs against a mounted code view.
+ */
+export function ReviewCodeView({
+  highlighter,
+  ...props
+}: Omit<ReviewCodeViewContentProps, 'highlighter'> & {
+  highlighter: CodeViewHighlighter | null;
+}) {
+  return highlighter ? (
+    <ReviewCodeViewContent {...props} highlighter={highlighter} />
+  ) : (
+    <div className="code-view" />
   );
 }

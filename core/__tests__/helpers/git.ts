@@ -22,6 +22,9 @@ export const getGitTestEnvironment = (
   GIT_CONFIG_VALUE_0: '/dev/null',
   GIT_CONFIG_VALUE_1: 'false',
   GIT_CONFIG_VALUE_2: 'false',
+  // Keep the developer's own Git config (e.g. status.showUntrackedFiles) out of tests.
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
   ...overrides,
 });
 

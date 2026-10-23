@@ -18,7 +18,9 @@ import {
   type CodeEditingStore,
 } from '../app/hooks/useCodeEditing.ts';
 import type { CodeViewItemMetadata, ReviewAnnotationMetadata } from '../lib/app-types.ts';
-import { workerHighlighterOptions } from '../lib/code-view-options.ts';
+import { getWorkerHighlighterOptions } from '../lib/code-view-options.ts';
+
+const workerHighlighterOptions = getWorkerHighlighterOptions('highlights');
 import { getDiffParseOptions, loadSectionContents } from '../lib/diff.ts';
 import { createChangedFile } from './helpers/fixtures.ts';
 import { renderReact, waitFor } from './helpers/react.tsx';

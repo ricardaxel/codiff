@@ -67,7 +67,7 @@ const { annotateGeneratedFiles } = require('./generated-files.cjs');
  * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
  */
 
-/** @param {string} launchPath @param {ReviewSource} [source] @param {{showWhitespace?: boolean}} [options] @returns {Promise<RepositoryState>} */
+/** @param {string} launchPath @param {ReviewSource} [source] @param {{showUntracked?: boolean; showWhitespace?: boolean}} [options] @returns {Promise<RepositoryState>} */
 const readRepositoryState = async (launchPath, source = { type: 'working-tree' }, options = {}) => {
   const state =
     source.type === 'pull-request'
@@ -83,10 +83,12 @@ const readRepositoryState = async (launchPath, source = { type: 'working-tree' }
             ? await readBranchState(launchPath, source)
             : source.type === 'branch-working-tree'
               ? await readBranchWorkingTreeState(launchPath, source, {
+                  showUntracked: options.showUntracked,
                   showWhitespace: options.showWhitespace,
                 })
               : await readWorkingTreeState(launchPath, {
                   eagerContents: false,
+                  showUntracked: options.showUntracked,
                   showWhitespace: options.showWhitespace,
                 });
   const comparisonState =
@@ -107,7 +109,7 @@ const readRepositoryState = async (launchPath, source = { type: 'working-tree' }
  *
  * @param {string} launchPath
  * @param {ReviewSource} [source]
- * @param {{showWhitespace?: boolean}} [options]
+ * @param {{showUntracked?: boolean; showWhitespace?: boolean}} [options]
  * @returns {Promise<RepositoryState>}
  */
 const readWalkthroughRepositoryState = async (launchPath, source, options = {}) => {
@@ -123,7 +125,7 @@ const readWalkthroughRepositoryState = async (launchPath, source, options = {}) 
       '--branch',
       '--no-ahead-behind',
       '-z',
-      '-uall',
+      options.showUntracked === false ? '-uno' : '-uall',
     ]),
   );
   if (status.paths.length > 0) {

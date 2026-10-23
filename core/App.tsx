@@ -41,6 +41,7 @@ import { useAppKeyboardShortcuts } from './app/hooks/useAppKeyboardShortcuts.ts'
 import { useAppReviewComments } from './app/hooks/useAppReviewComments.ts';
 import { useAppWalkthrough } from './app/hooks/useAppWalkthrough.ts';
 import { createCodeEditingStore, useUnsavedCodeEditsGuard } from './app/hooks/useCodeEditing.ts';
+import { useCodeViewHighlighter } from './app/hooks/useCodeViewHighlighter.ts';
 import { useDiffSearch } from './app/hooks/useDiffSearch.ts';
 import {
   getCodeFontLineHeight,
@@ -1092,13 +1093,17 @@ export default function App({
     }
 
     const removeConfigListener = window.codiff.onConfigChanged((nextConfig) => {
-      const previousShowWhitespace = preferencesRef.current.showWhitespace;
+      const previousPreferences = preferencesRef.current;
       const nextPreferences = getPreferencesFromConfig(nextConfig);
       preferencesRef.current = nextPreferences;
       setCodiffConfig(nextConfig);
       setPreferences(nextPreferences);
 
-      if (previousShowWhitespace === nextPreferences.showWhitespace) {
+      // These settings change which files and lines Git reports, so reload the state.
+      if (
+        previousPreferences.showWhitespace === nextPreferences.showWhitespace &&
+        previousPreferences.showUntracked === nextPreferences.showUntracked
+      ) {
         return;
       }
 
@@ -1600,6 +1605,8 @@ export default function App({
     [showOpenReviewSourceDialog],
   );
 
+  const reviewPaths = useMemo(() => state?.files.map((file) => file.path) ?? [], [state?.files]);
+  const highlighter = useCodeViewHighlighter(preferences.syntaxHighlighter, reviewPaths);
   const activeAgentBackend = launchOptions.agentBackend ?? codiffConfig.settings.agentBackend;
   // `none` turns off every AI feature, so their entry points are hidden.
   const activeAgentId = activeAgentBackend === 'none' ? null : activeAgentBackend;
@@ -1816,6 +1823,7 @@ export default function App({
     focusCommentId,
     focusCommentRequest,
     gitIdentity,
+    highlighter,
     hunkNavigation,
     itemVersionByKey,
     keymap: codiffConfig.keymap,
@@ -2124,6 +2132,11 @@ export default function App({
               ) : (
                 <span>{emptySourceDetail.text}</span>
               )}
+              {!preferences.showUntracked &&
+              (state.source.type === 'working-tree' ||
+                state.source.type === 'branch-working-tree') ? (
+                <span>Untracked files are hidden.</span>
+              ) : null}
             </div>
           </div>
         ) : visibleFiles.length === 0 ? (

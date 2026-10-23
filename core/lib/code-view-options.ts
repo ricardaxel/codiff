@@ -1,5 +1,12 @@
-import { preloadHighlighter, registerCustomTheme, setCustomExtension } from '@pierre/diffs';
-import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker';
+import {
+  disposeHighlighter,
+  getFiletypeFromFileName,
+  preloadHighlighter,
+  registerCustomTheme,
+  setCustomExtension,
+} from '@pierre/diffs';
+import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from '@pierre/diffs/worker';
+import type { CodiffSyntaxHighlighter } from '../config/types.ts';
 import dunkelTheme from '../themes/dunkel.json' with { type: 'json' };
 import lichtTheme from '../themes/licht.json' with { type: 'json' };
 import type { DiffSection } from '../types.ts';
@@ -37,17 +44,77 @@ export const DIFF_LINE_HEIGHT = 20;
 export const diffContextExpansionLineCount = 100;
 export const diffCollapsedContextThreshold = 12;
 
-export const workerHighlighterOptions = {
+/**
+ * `highlights` is the fast default; Shiki colors many more languages (D, for
+ * example) but is much slower. Only one engine can be active per JavaScript
+ * context, so a window uses one engine for all of its code views.
+ */
+export type CodeViewHighlighter = 'highlights' | 'shiki-js';
+
+// Licht and Dunkel are Zed themes, which Shiki cannot load, so Shiki uses GitHub's.
+const codeViewThemes = {
+  highlights: { dark: 'Dunkel', light: 'Licht' },
+  'shiki-js': { dark: 'github-dark', light: 'github-light' },
+} as const satisfies Record<CodeViewHighlighter, { dark: string; light: string }>;
+
+export const getCodeViewThemes = (highlighter: CodeViewHighlighter) => codeViewThemes[highlighter];
+
+export const getWorkerHighlighterOptions = (highlighter: CodeViewHighlighter) => ({
   maxLineDiffLength: 2000,
-  preferredHighlighter: 'highlights' as const,
-  theme: {
-    dark: 'Dunkel',
-    light: 'Licht',
-  },
+  preferredHighlighter: highlighter,
+  theme: codeViewThemes[highlighter],
   tokenizeMaxLineLength: 20_000,
   // Pierre's editor requires token metadata. Generate it in the workers so
   // entering edit mode can reuse the highlighted result without a local pass.
   useTokenTransformer: true,
+});
+
+// The engine preloaded at startup, before the review's files are known.
+let activeHighlighter: CodeViewHighlighter = 'highlights';
+
+export const getActiveCodeViewHighlighter = () => activeHighlighter;
+
+let pendingSwitch: Promise<void> = Promise.resolve();
+
+/**
+ * Release the active engine's shared highlighter and worker pool, then make
+ * `highlighter` the active one. Code views must be unmounted while this runs.
+ * Switches run one at a time.
+ */
+export const switchCodeViewHighlighter = (highlighter: CodeViewHighlighter) =>
+  (pendingSwitch = pendingSwitch.then(async () => {
+    if (highlighter === activeHighlighter) {
+      return;
+    }
+    terminateWorkerPoolSingleton();
+    await disposeHighlighter().catch(() => {});
+    activeHighlighter = highlighter;
+  }));
+
+/** Languages of the given paths, as the highlighters name them. */
+export const getReviewLanguages = (paths: Iterable<string>) =>
+  [...new Set(Array.from(paths, (path) => getFiletypeFromFileName(path)))]
+    .filter((language) => language !== 'text')
+    .sort();
+
+/**
+ * Pick the engine for a review. `auto` keeps the fast engine unless a file is
+ * in a language it cannot color; every language a file name maps to has a
+ * Shiki grammar, so Shiki then colors the whole review.
+ */
+export const resolveCodeViewHighlighter = async (
+  setting: CodiffSyntaxHighlighter,
+  languages: ReadonlyArray<string>,
+): Promise<CodeViewHighlighter> => {
+  if (setting !== 'auto') {
+    return setting === 'shiki' ? 'shiki-js' : 'highlights';
+  }
+  if (languages.length === 0) {
+    return 'highlights';
+  }
+  // The fast engine loads this module anyway, so checking costs no extra download.
+  const { isSupportedLanguage } = await import('@pierre/highlights');
+  return languages.every((language) => isSupportedLanguage(language)) ? 'highlights' : 'shiki-js';
 };
 
 export const maxWorkerThreads = 3;
@@ -67,7 +134,7 @@ export const getCodeViewWorkerPoolOptions = () => ({
 export const preloadCodeView = () => {
   void document.fonts.load('13px "Fira Code"').catch(() => {});
   void getOrCreateWorkerPoolSingleton({
-    highlighterOptions: workerHighlighterOptions,
+    highlighterOptions: getWorkerHighlighterOptions(activeHighlighter),
     poolOptions: getCodeViewWorkerPoolOptions(),
   })
     .initialize()
@@ -77,12 +144,14 @@ export const preloadCodeView = () => {
 
 // File metadata is fetched over IPC before CodeView mounts. Use that time to
 // load the shared highlighter that small diffs will need on the main thread.
-export const preloadCodeViewHighlighter = () =>
-  preloadHighlighter({
+export const preloadCodeViewHighlighter = () => {
+  const themes = getCodeViewThemes(activeHighlighter);
+  return preloadHighlighter({
     langs: ['text'],
-    preferredHighlighter: workerHighlighterOptions.preferredHighlighter,
-    themes: ['Licht', 'Dunkel'],
+    preferredHighlighter: activeHighlighter,
+    themes: [themes.light, themes.dark],
   });
+};
 
 export const codeViewUnsafeCSS = `
   :host {

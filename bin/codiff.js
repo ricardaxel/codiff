@@ -119,6 +119,31 @@ const runCodiffUpdate = () => {
   });
 };
 
+const runInstallRemoteHelper = async (host) => {
+  if (!host) {
+    process.stderr.write('codiff: --install-remote-helper requires an SSH host alias.\n');
+    return 1;
+  }
+  const { installRemoteHelper } = require('../electron/remote-helper.cjs');
+  try {
+    await installRemoteHelper(host);
+  } catch (error) {
+    process.stderr.write(`codiff: ${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+  process.stdout.write(
+    [
+      `Installed the Codiff remote helper on ${host} as ~/.local/bin/codiff.`,
+      `While Codiff is running here, it stays connected to ${host} over SSH.`,
+      '',
+      `Run \`codiff -r\` in a repository on ${host} to open it here, however you connected.`,
+      `If ~/.local/bin is not on your PATH on ${host}, run ~/.local/bin/codiff -r instead.`,
+      '',
+    ].join('\n'),
+  );
+  return 0;
+};
+
 const run = async () => {
   const rawArguments = process.argv.slice(2);
   if (rawArguments.length === 1 && rawArguments[0] === 'update') {
@@ -171,6 +196,11 @@ const run = async () => {
 
   if (parsedArguments.walkthroughGuide) {
     process.stdout.write(buildWalkthroughGuide());
+    return;
+  }
+
+  if (parsedArguments.installRemoteHelperHost != null) {
+    process.exitCode = await runInstallRemoteHelper(parsedArguments.installRemoteHelperHost);
     return;
   }
 

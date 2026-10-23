@@ -1600,6 +1600,9 @@ export default function App({
     [showOpenReviewSourceDialog],
   );
 
+  const activeAgentBackend = launchOptions.agentBackend ?? codiffConfig.settings.agentBackend;
+  // `none` turns off every AI feature, so their entry points are hidden.
+  const activeAgentId = activeAgentBackend === 'none' ? null : activeAgentBackend;
   const commandBarCommands = useAppCommands({
     changeSidebarMode,
     focusFileFilter,
@@ -1615,6 +1618,7 @@ export default function App({
     reviewCommentsRef,
     stateRef,
     viewedRef,
+    walkthroughEnabled: activeAgentId != null,
   });
 
   const updateSelectedPathFromScroll = useCallback(
@@ -1668,7 +1672,6 @@ export default function App({
       });
   }, []);
 
-  const activeAgentBackend = launchOptions.agentBackend ?? codiffConfig.settings.agentBackend;
   const showAgentUnavailablePanel =
     sidebarMode === 'walkthrough' &&
     !narrativeWalkthrough &&
@@ -1732,7 +1735,7 @@ export default function App({
               agentSkillInstalling={agentSkillInstalling}
               agentSkillLabel={agentSkillLabel}
               installing={terminalHelperInstalling}
-              onInstallAgentSkill={installAgentSkill}
+              onInstallAgentSkill={activeAgentId ? installAgentSkill : undefined}
               onInstallTerminalHelper={installTerminalHelper}
             />
           ) : (
@@ -1797,7 +1800,8 @@ export default function App({
   // render paths can't drift apart.
   const commonReviewProps = {
     activeSearchMatch: activeDiffSearchMatch,
-    agentId: activeAgentBackend,
+    // The agent avatar is only shown next to the Ask action, which is hidden while AI is off.
+    agentId: activeAgentId ?? 'codex',
     agentLabel,
     codeEditingStore,
     codeQualityFindings: state.codeQualityFindings,
@@ -1816,7 +1820,7 @@ export default function App({
     itemVersionByKey,
     keymap: codiffConfig.keymap,
     loadingSectionIds,
-    onAskCodex: askCodex,
+    onAskCodex: activeAgentId ? askCodex : undefined,
     onCommentDraftChange: updateActiveReviewCommentDraft,
     onCreateComment: createComment,
     onDeleteComment: deleteComment,
@@ -1873,12 +1877,18 @@ export default function App({
     );
   };
   const reviewModes = [
-    {
-      icon: <Path aria-hidden size={14} weight="bold" />,
-      indicator: walkthroughUnread ? <span aria-hidden className="review-mode-dot" /> : undefined,
-      label: 'Walkthrough',
-      value: 'walkthrough',
-    },
+    ...(activeAgentId
+      ? [
+          {
+            icon: <Path aria-hidden size={14} weight="bold" />,
+            indicator: walkthroughUnread ? (
+              <span aria-hidden className="review-mode-dot" />
+            ) : undefined,
+            label: 'Walkthrough',
+            value: 'walkthrough' as const,
+          },
+        ]
+      : []),
     {
       icon: <TreeStructure aria-hidden size={14} weight="bold" />,
       label: 'Tree',

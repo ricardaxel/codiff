@@ -156,9 +156,13 @@ const normalizeDiffStyle = (diffStyle) =>
 /** @param {unknown} position @returns {'left' | 'right'} */
 const normalizeSidebarPosition = (position) => (position === 'right' ? 'right' : 'left');
 
-/** @param {unknown} backend @returns {'codex' | 'claude' | 'opencode' | 'pi'} */
+/** @param {unknown} backend @returns {'codex' | 'claude' | 'opencode' | 'pi' | 'none'} */
 const normalizeAgentBackend = (backend) =>
-  backend === 'codex' || backend === 'claude' || backend === 'opencode' || backend === 'pi'
+  backend === 'codex' ||
+  backend === 'claude' ||
+  backend === 'opencode' ||
+  backend === 'pi' ||
+  backend === 'none'
     ? backend
     : 'codex';
 

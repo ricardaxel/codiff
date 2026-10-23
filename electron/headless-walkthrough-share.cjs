@@ -1,7 +1,7 @@
 // @ts-check
 
 const { readFileSync } = require('node:fs');
-const { getAgent } = require('./agent.cjs');
+const { AI_DISABLED_REASON, getEnabledAgent, normalizeAgentSetting } = require('./agent.cjs');
 const { readConfig, writeConfig } = require('./config.cjs');
 const { createCloudflareAccessClient } = require('./cloudflare-access.cjs');
 const {
@@ -154,7 +154,7 @@ const readGeneratedShareState = async (repositoryPath, source, config) =>
 
 /**
  * @param {{
- *   agent?: 'claude' | 'codex' | 'opencode' | 'pi';
+ *   agent?: 'claude' | 'codex' | 'opencode' | 'pi' | 'none';
  *   codiffVersion: string;
  *   forcePublic?: boolean;
  *   openExternal: (url: string) => Promise<void>;
@@ -175,6 +175,9 @@ const shareWalkthroughFile = async ({
   walkthroughFile,
 }) => {
   const config = readConfig();
+  if (normalizeAgentSetting(agent || config.settings.agentBackend) === 'none') {
+    throw new Error(AI_DISABLED_REASON);
+  }
   const [state, uploader] = await readShareState(repositoryPath, source, config);
 
   let input;
@@ -207,7 +210,7 @@ const shareWalkthroughFile = async ({
 
 /**
  * @param {{
- *   agent?: 'claude' | 'codex' | 'opencode' | 'pi';
+ *   agent?: 'claude' | 'codex' | 'opencode' | 'pi' | 'none';
  *   claudeSessionId?: string;
  *   codexSessionId?: string;
  *   codiffVersion: string;
@@ -236,7 +239,10 @@ const generateAndShareWalkthrough = async ({
   walkthroughContextPath,
 }) => {
   const config = readConfig();
-  const agent = getAgent(agentOverride || config.settings.agentBackend);
+  const agent = getEnabledAgent(agentOverride || config.settings.agentBackend);
+  if (!agent) {
+    throw new Error(AI_DISABLED_REASON);
+  }
   const [state, uploader] = await readGeneratedShareState(repositoryPath, source, config);
   const sessionIds = {
     claudeSessionId,

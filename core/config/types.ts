@@ -1,6 +1,8 @@
 export type CodiffDiffStyle = 'split' | 'unified';
 export type CodiffTheme = 'system' | 'light' | 'dark';
-export type CodiffAgentBackend = 'codex' | 'claude' | 'opencode' | 'pi';
+export type CodiffAgentId = 'codex' | 'claude' | 'opencode' | 'pi';
+// 'none' turns off every AI feature: walkthroughs, the review assistant and agent skills.
+export type CodiffAgentBackend = CodiffAgentId | 'none';
 
 export type CodiffSettings = {
   agentBackend: CodiffAgentBackend;

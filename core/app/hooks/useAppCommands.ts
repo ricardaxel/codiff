@@ -26,6 +26,7 @@ type UseAppCommandsOptions = {
   reviewCommentsRef: RefObject<ReadonlyArray<ReviewComment>>;
   stateRef: RefObject<RepositoryState | null>;
   viewedRef: RefObject<Record<string, string>>;
+  walkthroughEnabled: boolean;
 };
 
 export function useAppCommands({
@@ -43,6 +44,7 @@ export function useAppCommands({
   reviewCommentsRef,
   stateRef,
   viewedRef,
+  walkthroughEnabled,
 }: UseAppCommandsOptions) {
   const registryRef = useRef(createCommandRegistry());
   const [commands, setCommands] = useState<ReadonlyArray<Command>>([]);
@@ -94,11 +96,15 @@ export function useAppCommands({
         id: 'sidebar-history',
         title: 'Show History',
       }),
-      registry.register({
-        execute: () => changeSidebarMode('walkthrough'),
-        id: 'sidebar-walkthrough',
-        title: 'Show Walkthrough',
-      }),
+      ...(walkthroughEnabled
+        ? [
+            registry.register({
+              execute: () => changeSidebarMode('walkthrough'),
+              id: 'sidebar-walkthrough',
+              title: 'Show Walkthrough',
+            }),
+          ]
+        : []),
       registry.register({
         execute: () => {
           const currentState = stateRef.current;
@@ -251,6 +257,7 @@ export function useAppCommands({
     reviewCommentsRef,
     stateRef,
     viewedRef,
+    walkthroughEnabled,
   ]);
 
   return commands;

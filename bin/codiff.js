@@ -236,7 +236,8 @@ const run = async () => {
               : codexSessionId;
       try {
         const url = await sharePlanFile({
-          agent: agentBackend ?? undefined,
+          // Plans are shared without AI; `none` only means no agent metadata.
+          agent: agentBackend === 'none' ? undefined : (agentBackend ?? undefined),
           codiffVersion: packageJson.version,
           forcePublic,
           openExternal,

@@ -84,6 +84,15 @@ test('electron config normalizes code font settings', () => {
   expect(readElectronConfig({ settings: { codeFontSize: 99 } }).settings.codeFontSize).toBe(32);
 });
 
+test('electron config keeps none to turn off AI features', () => {
+  expect(readElectronConfig({ settings: { agentBackend: 'none' } }).settings.agentBackend).toBe(
+    'none',
+  );
+  expect(readElectronConfig({ settings: { agentBackend: 'gpt' } }).settings.agentBackend).toBe(
+    'codex',
+  );
+});
+
 test('electron config normalizes sidebar position', () => {
   expect(readElectronConfig({}).settings.sidebarPosition).toBe('left');
   expect(

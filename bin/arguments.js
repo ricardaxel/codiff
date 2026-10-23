@@ -10,8 +10,8 @@ const { parseReviewUrl, resolveReviewUrl } = reviewSource;
 
 export const flagDefinitions = [
   {
-    argument: '<codex|claude|opencode|pi>',
-    description: 'Override the agent backend for this session.',
+    argument: '<codex|claude|opencode|pi|none>',
+    description: 'Override the agent backend for this session; none turns off AI.',
     name: 'agent',
     type: 'string',
   },
@@ -368,7 +368,8 @@ export const parseArguments = (args) => {
     values.agent === 'codex' ||
     values.agent === 'claude' ||
     values.agent === 'opencode' ||
-    values.agent === 'pi'
+    values.agent === 'pi' ||
+    values.agent === 'none'
       ? values.agent
       : null;
   let pullRequestBranch = null;

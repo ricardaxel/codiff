@@ -206,7 +206,8 @@ export function FirstRunPanel({
   agentSkillInstalling: boolean;
   agentSkillLabel: string;
   installing: boolean;
-  onInstallAgentSkill: () => void;
+  /** Omitted while AI features are turned off. */
+  onInstallAgentSkill?: () => void;
   onInstallTerminalHelper: () => void;
 }) {
   return (
@@ -224,7 +225,7 @@ export function FirstRunPanel({
         <button disabled={installing} onClick={onInstallTerminalHelper} type="button">
           {installing ? 'Installing...' : 'Install Terminal Helper'}
         </button>
-        {!agentSkillInstalled ? (
+        {onInstallAgentSkill && !agentSkillInstalled ? (
           <button disabled={agentSkillInstalling} onClick={onInstallAgentSkill} type="button">
             {agentSkillInstalling ? 'Installing...' : `Install ${agentSkillLabel}`}
           </button>

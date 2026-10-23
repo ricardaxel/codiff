@@ -222,6 +222,18 @@ application menu:
 - `opencode` — the [OpenCode](https://opencode.ai/) CLI, configured with
   `settings.opencodeModel`.
 - `pi` — the Pi CLI, using its configured default model.
+- `none` — turns off every AI feature. Codiff hides walkthroughs, the review assistant and the
+  agent skill installer, never launches an agent CLI, and `-w` or `--share` of a walkthrough
+  reports that AI is off. Plans can still be shared. `--agent none` does the same for a single
+  launch, and `--agent <backend>` turns AI back on for one launch.
+
+```jsonc
+{
+  "settings": {
+    "agentBackend": "none",
+  },
+}
+```
 
 The Codex `Model` and `Reasoning Effort` menus load the installed CLI's model catalog in the
 background. They offer its visible models and supported reasoning efforts, including new models

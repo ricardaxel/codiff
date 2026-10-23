@@ -1,5 +1,5 @@
 import type { MarkdownAnnotationAnchor } from '@nkzw/mdx-editor';
-import type { CodiffDiffStyle } from './config/types.ts';
+import type { CodiffAgentBackend, CodiffDiffStyle } from './config/types.ts';
 
 export type DiffSection = {
   binary: boolean;
@@ -440,7 +440,7 @@ export type WalkthroughContext = {
 };
 
 export type CodiffLaunchOptions = {
-  agentBackend?: 'codex' | 'claude' | 'opencode' | 'pi';
+  agentBackend?: CodiffAgentBackend;
   applyUpdate?: boolean;
   claudeSessionId?: string;
   codexSessionId?: string;
@@ -792,7 +792,7 @@ export type DiffImageContentResult =
 export type CodiffTheme = 'system' | 'light' | 'dark';
 
 export type CodiffPreferences = {
-  agentBackend: 'codex' | 'claude' | 'opencode' | 'pi';
+  agentBackend: CodiffAgentBackend;
   claudeModel: string;
   codeFontFamily: string;
   codeFontSize: number;

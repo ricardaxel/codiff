@@ -195,7 +195,7 @@ show_help() {
   printf '  %-38s%s%s%s\n' "update" "$gray" "Update Codiff to the latest release." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Options:${reset}"
-  printf '  %-38s%s%s%s\n' "--agent <codex|claude|opencode|pi>" "$gray" "Override the agent backend for this session." "$reset"
+  printf '  %-38s%s%s%s\n' "--agent <codex|claude|opencode|pi|none>" "$gray" "Override the agent backend for this session; none turns off AI." "$reset"
   printf '  %-38s%s%s%s\n' "--branch <ref>" "$gray" "Review the current branch against a target branch." "$reset"
   printf '  %-38s%s%s%s\n' "--commit <ref>" "$gray" "Review a specific commit." "$reset"
   printf '  %-38s%s%s%s\n' "--codex-session <id>" "$gray" "Attach Codex session metadata to a walkthrough." "$reset"

@@ -6,8 +6,10 @@ const {
   detectInitialAgentBackend,
   getAgent,
   getAgentMenuModels,
+  getEnabledAgent,
   listAgents,
   normalizeAgentBackend,
+  normalizeAgentSetting,
 } = require('../agent.cjs') as {
   detectInitialAgentBackend: (
     isAvailable?: (agent: { id: 'codex' | 'claude' | 'opencode' | 'pi' }) => boolean,
@@ -28,8 +30,10 @@ const {
     selectedModel: string,
     models?: ReadonlyArray<{ id: string; label: string }>,
   ) => ReadonlyArray<{ id: string; label: string }>;
+  getEnabledAgent: (backendId: unknown) => { id: string } | null;
   listAgents: () => ReadonlyArray<{ id: string }>;
   normalizeAgentBackend: (value: unknown) => string;
+  normalizeAgentSetting: (value: unknown) => string;
 };
 
 test('normalizes unknown agent backends to the default', () => {
@@ -39,6 +43,16 @@ test('normalizes unknown agent backends to the default', () => {
   expect(normalizeAgentBackend('pi')).toBe('pi');
   expect(normalizeAgentBackend('gpt')).toBe('codex');
   expect(normalizeAgentBackend(undefined)).toBe('codex');
+});
+
+test('keeps none as a setting while requiring an agent elsewhere', () => {
+  expect(normalizeAgentSetting('none')).toBe('none');
+  expect(normalizeAgentSetting('claude')).toBe('claude');
+  expect(normalizeAgentSetting('gpt')).toBe('codex');
+  expect(normalizeAgentBackend('none')).toBe('codex');
+  expect(getEnabledAgent('none')).toBeNull();
+  expect(getEnabledAgent('pi')?.id).toBe('pi');
+  expect(getEnabledAgent(undefined)?.id).toBe('codex');
 });
 
 test('lists all agent backends', () => {

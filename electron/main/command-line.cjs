@@ -300,7 +300,8 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     rawAgentBackend === 'codex' ||
     rawAgentBackend === 'claude' ||
     rawAgentBackend === 'opencode' ||
-    rawAgentBackend === 'pi'
+    rawAgentBackend === 'pi' ||
+    rawAgentBackend === 'none'
       ? rawAgentBackend
       : undefined;
   const walkthroughContextPath =

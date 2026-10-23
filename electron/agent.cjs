@@ -173,8 +173,29 @@ const normalizeAgentBackend = (value) =>
     ? value
     : DEFAULT_AGENT_BACKEND;
 
+/**
+ * Normalize the `agentBackend` setting, which may also be `none` to turn off
+ * every AI feature. Use `normalizeAgentBackend` when an agent is required.
+ *
+ * @param {unknown} value
+ * @returns {'codex' | 'claude' | 'opencode' | 'pi' | 'none'}
+ */
+const normalizeAgentSetting = (value) => (value === 'none' ? 'none' : normalizeAgentBackend(value));
+
 /** @param {unknown} backendId @returns {Agent} */
 const getAgent = (backendId) => AGENT_FACTORIES[normalizeAgentBackend(backendId)]();
+
+/**
+ * The agent for a setting, or `null` when AI features are turned off.
+ *
+ * @param {unknown} backendId
+ * @returns {Agent | null}
+ */
+const getEnabledAgent = (backendId) =>
+  normalizeAgentSetting(backendId) === 'none' ? null : getAgent(backendId);
+
+const AI_DISABLED_REASON =
+  'AI features are turned off. Set settings.agentBackend in ~/.codiff/codiff.jsonc to an agent to use them.';
 
 /** @returns {ReadonlyArray<Agent>} */
 const listAgents = () => AGENT_BACKENDS.map((id) => AGENT_FACTORIES[id]());
@@ -199,9 +220,12 @@ const detectInitialAgentBackend = (isAvailable = (agent) => agent.isAvailable())
   listAgents().find(isAvailable)?.id ?? DEFAULT_AGENT_BACKEND;
 
 module.exports = {
+  AI_DISABLED_REASON,
   detectInitialAgentBackend,
   getAgentMenuModels,
   getAgent,
+  getEnabledAgent,
   listAgents,
   normalizeAgentBackend,
+  normalizeAgentSetting,
 };

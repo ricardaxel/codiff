@@ -38,11 +38,12 @@ const { diagnoseWalkthroughMismatch } = require('./walkthrough-diagnosis.cjs');
 const { readCommitMessageReply } = require('./walkthrough-commit-message.cjs');
 const { normalizePiModel } = require('./pi.cjs');
 const {
+  AI_DISABLED_REASON,
   detectInitialAgentBackend,
-  getAgent,
   getAgentMenuModels,
+  getEnabledAgent,
   listAgents,
-  normalizeAgentBackend,
+  normalizeAgentSetting,
 } = require('./agent.cjs');
 const { buildInstallSkillMenuItem, listAgentSkills } = require('./agent-skills.cjs');
 const {
@@ -195,7 +196,8 @@ const refreshInstalledAgentFiles = () => {
   }
 };
 
-const getActiveAgent = () => getAgent(config.settings.agentBackend);
+/** The configured agent, or `null` when AI features are turned off. */
+const getActiveAgent = () => getEnabledAgent(config.settings.agentBackend);
 
 /** @param {string} repositoryPath @param {ReviewSource} [source] */
 const readRepositoryStateWithConfig = (repositoryPath, source) =>
@@ -211,15 +213,16 @@ const readInitialRepositoryStateWithConfig = (repositoryPath, launchOptions) =>
       })
     : readRepositoryStateWithConfig(repositoryPath, launchOptions.source);
 
-/** @param {number} webContentsId */
-const resolveWindowAgent = (webContentsId) => {
-  const override = windowLaunchOptions.get(webContentsId)?.agentBackend;
-  return getAgent(
-    override === 'codex' || override === 'claude' || override === 'opencode' || override === 'pi'
-      ? override
-      : config.settings.agentBackend,
+/**
+ * The agent for a window, or `null` when AI features are turned off. A
+ * launch-time `--agent` overrides the configured backend in either direction.
+ *
+ * @param {number} webContentsId
+ */
+const resolveWindowAgent = (webContentsId) =>
+  getEnabledAgent(
+    windowLaunchOptions.get(webContentsId)?.agentBackend ?? config.settings.agentBackend,
   );
-};
 
 /** @param {'codex' | 'claude' | 'opencode' | 'pi'} agentId */
 const skillInstallerFor = (agentId) => skillInstallers.get(agentId);
@@ -375,7 +378,7 @@ const updateConfig = (nextConfig) => {
     settings: {
       ...config.settings,
       ...nextConfig.settings,
-      agentBackend: normalizeAgentBackend(
+      agentBackend: normalizeAgentSetting(
         nextConfig.settings?.agentBackend ?? config.settings.agentBackend,
       ),
       claudeModel: normalizeClaudeModel(
@@ -403,9 +406,9 @@ const updateConfig = (nextConfig) => {
   Menu.setApplicationMenu(buildApplicationMenu());
 };
 
-/** @param {'codex' | 'claude' | 'opencode' | 'pi'} backend */
+/** @param {'codex' | 'claude' | 'opencode' | 'pi' | 'none'} backend */
 const selectAgentBackend = (backend) => {
-  const agentBackend = normalizeAgentBackend(backend);
+  const agentBackend = normalizeAgentSetting(backend);
   if (config.settings.agentBackend === agentBackend) {
     return;
   }
@@ -569,17 +572,28 @@ const openRepositoryFolder = async (browserWindow) => {
 };
 
 /** @returns {Array<import('electron').MenuItemConstructorOptions>} */
-const buildAgentSubmenu = () =>
-  listAgents().map((agent) => ({
+const buildAgentSubmenu = () => [
+  ...listAgents().map((agent) => ({
     checked: config.settings.agentBackend === agent.id,
     click: () => selectAgentBackend(agent.id),
     label: agent.label,
-    type: 'radio',
-  }));
+    type: /** @type {const} */ ('radio'),
+  })),
+  { type: /** @type {const} */ ('separator') },
+  {
+    checked: config.settings.agentBackend === 'none',
+    click: () => selectAgentBackend('none'),
+    label: 'None (AI Off)',
+    type: /** @type {const} */ ('radio'),
+  },
+];
 
 /** @returns {Array<import('electron').MenuItemConstructorOptions>} */
 const buildModelSubmenu = () => {
   const agent = getActiveAgent();
+  if (!agent) {
+    return [];
+  }
   const selectedModel = config.settings[agent.modelSettingKey];
   return getAgentMenuModels(
     agent,
@@ -674,11 +688,15 @@ const buildApplicationMenu = () =>
                   label: 'Agent',
                   submenu: buildAgentSubmenu(),
                 },
-                {
-                  label: 'Model',
-                  submenu: buildModelSubmenu(),
-                },
-                ...(getActiveAgent().id === 'codex'
+                ...(getActiveAgent()
+                  ? [
+                      {
+                        label: 'Model',
+                        submenu: buildModelSubmenu(),
+                      },
+                    ]
+                  : []),
+                ...(getActiveAgent()?.id === 'codex'
                   ? [{ label: 'Reasoning Effort', submenu: buildReasoningEffortSubmenu() }]
                   : []),
                 { type: 'separator' },
@@ -696,7 +714,7 @@ const buildApplicationMenu = () =>
                     ),
                   label: 'Install Terminal Helper',
                 },
-                getInstallSkillMenuItem(),
+                ...(getActiveAgent() ? [getInstallSkillMenuItem()] : []),
                 { type: 'separator' },
                 { role: 'hide' },
                 { role: 'hideOthers' },
@@ -717,11 +735,15 @@ const buildApplicationMenu = () =>
                   label: 'Agent',
                   submenu: buildAgentSubmenu(),
                 },
-                {
-                  label: 'Model',
-                  submenu: buildModelSubmenu(),
-                },
-                ...(getActiveAgent().id === 'codex'
+                ...(getActiveAgent()
+                  ? [
+                      {
+                        label: 'Model',
+                        submenu: buildModelSubmenu(),
+                      },
+                    ]
+                  : []),
+                ...(getActiveAgent()?.id === 'codex'
                   ? [{ label: 'Reasoning Effort', submenu: buildReasoningEffortSubmenu() }]
                   : []),
                 { type: 'separator' },
@@ -739,7 +761,7 @@ const buildApplicationMenu = () =>
                     ),
                   label: 'Install Terminal Helper',
                 },
-                getInstallSkillMenuItem(),
+                ...(getActiveAgent() ? [getInstallSkillMenuItem()] : []),
                 { type: 'separator' },
               ]),
           {
@@ -1418,7 +1440,7 @@ if (squirrelStartup || !lock) {
     config.settings.piModel = normalizePiModel(config.settings.piModel);
     config.settings.agentBackend = shouldDetectInitialAgent
       ? detectInitialAgentBackend()
-      : normalizeAgentBackend(config.settings.agentBackend);
+      : normalizeAgentSetting(config.settings.agentBackend);
     if (shouldDetectInitialAgent) {
       writeConfig(config);
     }
@@ -1450,7 +1472,7 @@ if (squirrelStartup || !lock) {
     // Model discovery starts a login shell and an agent process. Keep it out
     // of the initial review's CPU and disk work.
     setTimeout(() => {
-      if (!quitting && getActiveAgent().id === 'codex') void loadCodexModels();
+      if (!quitting && getActiveAgent()?.id === 'codex') void loadCodexModels();
     }, 1000).unref();
 
     watchConfig((nextConfig) => {
@@ -1459,7 +1481,7 @@ if (squirrelStartup || !lock) {
         ...nextConfig,
         settings: {
           ...nextConfig.settings,
-          agentBackend: normalizeAgentBackend(nextConfig.settings.agentBackend),
+          agentBackend: normalizeAgentSetting(nextConfig.settings.agentBackend),
           claudeModel: normalizeClaudeModel(nextConfig.settings.claudeModel),
           codeFontFamily: normalizeCodeFontFamily(nextConfig.settings.codeFontFamily),
           codeFontSize: normalizeCodeFontSize(nextConfig.settings.codeFontSize),
@@ -1473,7 +1495,7 @@ if (squirrelStartup || !lock) {
       nativeTheme.themeSource = config.settings.theme;
       sendConfigChanged();
       Menu.setApplicationMenu(buildApplicationMenu());
-      if (previousAgent !== 'codex' && getActiveAgent().id === 'codex') void loadCodexModels();
+      if (previousAgent !== 'codex' && getActiveAgent()?.id === 'codex') void loadCodexModels();
     });
   });
 
@@ -1688,12 +1710,14 @@ ipcMain.handle(
 );
 
 ipcMain.handle('codiff:getAgentSkillStatus', (event) => {
-  const installer = skillInstallerFor(resolveWindowAgent(event.sender.id).id);
+  const agent = resolveWindowAgent(event.sender.id);
+  const installer = agent ? skillInstallerFor(agent.id) : undefined;
   return installer ? installer.getStatus() : { installed: false, path: '' };
 });
 
 ipcMain.handle('codiff:installAgentSkill', async (event) => {
-  const installer = skillInstallerFor(resolveWindowAgent(event.sender.id).id);
+  const agent = resolveWindowAgent(event.sender.id);
+  const installer = agent ? skillInstallerFor(agent.id) : undefined;
   if (!installer) {
     return { installed: false, path: '' };
   }
@@ -1731,6 +1755,9 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) 
       source || launchOptions?.source,
     );
     const agent = resolveWindowAgent(event.sender.id);
+    if (!agent) {
+      return { reason: AI_DISABLED_REASON, status: 'unavailable' };
+    }
     const walkthroughFile = launchOptions?.walkthroughFile;
     if (walkthroughFile) {
       let contents;
@@ -1887,11 +1914,11 @@ ipcMain.handle('codiff:sharePlan', async (event, review) => {
     getMarkdownDocumentContext(event.sender.id),
   );
   const agent = resolveWindowAgent(event.sender.id);
-  const sessionId = launchOptions[agent.sessionLaunchOptionKey];
+  const sessionId = agent ? launchOptions[agent.sessionLaunchOptionKey] : undefined;
   return shareSnapshot(
     getPlanShareContext(event.sender.id),
     createSharedPlanSnapshot({
-      agent: agent.id,
+      agent: agent?.id,
       codiffVersion: app.getVersion(),
       content: document.content,
       filePath: launchOptions.planFile,
@@ -1924,6 +1951,9 @@ ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {
     request?.source || launchOptions?.source,
   );
   const agent = resolveWindowAgent(event.sender.id);
+  if (!agent) {
+    return { reason: AI_DISABLED_REASON, status: 'unavailable' };
+  }
   return readReviewAssistantReply(state, request, agent, getAgentOptions(agent));
 });
 
@@ -1948,6 +1978,9 @@ ipcMain.handle('codiff:updateWalkthroughCommitMessage', async (event, request) =
     request?.source || launchOptions?.source,
   );
   const agent = resolveWindowAgent(event.sender.id);
+  if (!agent) {
+    return { reason: AI_DISABLED_REASON, status: 'unavailable' };
+  }
   return readCommitMessageReply(state, request, agent, getAgentOptions(agent));
 });
 

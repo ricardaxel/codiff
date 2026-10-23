@@ -133,7 +133,9 @@ test('completes paths for flags documented as taking a file', () => {
 });
 
 test('completes the documented choices for flags that list them', () => {
-  expect(generateCompletionScript('fish')).toContain("-l agent -x -a 'claude codex opencode pi'");
+  expect(generateCompletionScript('fish')).toContain(
+    "-l agent -x -a 'claude codex none opencode pi'",
+  );
 });
 
 test('completes nothing for flags whose value is opaque', () => {
@@ -149,7 +151,7 @@ test.for(completionShells)('keeps hidden flags out of the %s script', (shell) =>
 test.for(completionShells)('completes the agent backends in %s', (shell) => {
   const script = generateCompletionScript(shell);
 
-  for (const backend of ['claude', 'codex', 'opencode', 'pi']) {
+  for (const backend of ['claude', 'codex', 'none', 'opencode', 'pi']) {
     expect(script).toContain(backend);
   }
 });
@@ -259,7 +261,7 @@ test.skipIf(!isInstalled('zsh'))('generates a syntactically valid zsh script', a
 test.skipIf(!isInstalled('fish'))('completes flag values in fish', async () => {
   const { candidates } = await completeWithFish('codiff --agent ');
 
-  expect(candidates).toEqual(['claude', 'codex', 'opencode', 'pi']);
+  expect(candidates).toEqual(['claude', 'codex', 'none', 'opencode', 'pi']);
 });
 
 test.skipIf(!isInstalled('fish'))('completes refs without running them in fish', async () => {

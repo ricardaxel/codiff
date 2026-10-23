@@ -93,6 +93,7 @@ test('app commands register the complete command set and delegate dynamic action
         reviewCommentsRef: { current: [] },
         stateRef,
         viewedRef,
+        walkthroughEnabled: true,
       }}
     />,
   );
@@ -152,6 +153,36 @@ test('app commands register the complete command set and delegate dynamic action
   expect(command('toggle-word-wrap').description?.()).toBe('Enable Word Wrap');
   preferencesRef.current.wordWrap = true;
   expect(command('toggle-word-wrap').description?.()).toBe('Disable Word Wrap');
+});
+
+test('app commands omit the walkthrough while AI features are turned off', async () => {
+  let commands: ReturnType<typeof useAppCommands> = [];
+  await using _view = await renderReact(
+    <AppCommandsHarness
+      onCommands={(nextCommands) => (commands = nextCommands)}
+      options={{
+        changeSidebarMode: vi.fn(),
+        focusFileFilter: vi.fn(),
+        getReviewCommandTarget: vi.fn(() => null),
+        onOpenDiffSearch: vi.fn(),
+        onOpenReviewSource: vi.fn(),
+        onOpenSelectedFile: vi.fn(),
+        onRefreshRepository: vi.fn(),
+        onToggleSidebar: vi.fn(),
+        onToggleViewed: vi.fn(),
+        onToggleWordWrap: vi.fn(),
+        preferencesRef: { current: { ...createDefaultConfig().settings, agentBackend: 'none' } },
+        reviewCommentsRef: { current: [] },
+        stateRef: { current: null },
+        viewedRef: { current: {} },
+        walkthroughEnabled: false,
+      }}
+    />,
+  );
+
+  const ids = commands.map((command) => command.id);
+  expect(ids).toContain('sidebar-history');
+  expect(ids).not.toContain('sidebar-walkthrough');
 });
 
 const keyboardKeymap = {

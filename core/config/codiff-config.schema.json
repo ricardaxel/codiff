@@ -16,9 +16,9 @@
       "properties": {
         "agentBackend": {
           "type": "string",
-          "enum": ["codex", "claude", "opencode", "pi"],
+          "enum": ["codex", "claude", "opencode", "pi", "none"],
           "default": "codex",
-          "description": "Which agent CLI powers review assistance and walkthroughs. 'codex' uses the OpenAI Codex CLI; 'claude' uses the Claude Code CLI; 'opencode' uses the OpenCode CLI; 'pi' uses the Pi CLI."
+          "description": "Which agent CLI powers review assistance and walkthroughs. 'codex' uses the OpenAI Codex CLI; 'claude' uses the Claude Code CLI; 'opencode' uses the OpenCode CLI; 'pi' uses the Pi CLI; 'none' turns off all AI features."
         },
         "checkForUpdates": {
           "type": "boolean",

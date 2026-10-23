@@ -202,6 +202,7 @@ show_help() {
   printf '  %-38s%s%s%s\n' "--claude-session <id>" "$gray" "Attach Claude Code session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--completions <bash|fish|zsh>" "$gray" "Print a shell completion script, then exit." "$reset"
   printf '  %-38s%s%s%s\n' "--help, -h" "$gray" "Show this help message and exit." "$reset"
+  printf '  %-38s%s%s%s\n' "--install-remote-helper <host>" "$gray" "Let \`codiff -r\` on an SSH host open its repositories here." "$reset"
   printf '  %-38s%s%s%s\n' "--opencode-session <id>" "$gray" "Attach OpenCode session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--pi-session <id>" "$gray" "Attach Pi session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--plan <file>" "$gray" "Edit a Markdown plan and wait until it is handed back." "$reset"
@@ -254,7 +255,7 @@ fi
 # helper hands the whole command line over to the bundled runtime.
 for arg in "$@"; do
   case "$arg" in
-    --share|--public|--completions|--completions=*)
+    --share|--public|--completions|--completions=*|--install-remote-helper|--install-remote-helper=*)
       resolve_runtime "$arg"
       ELECTRON_RUN_AS_NODE=1 exec "$runtime" "$script_dir/codiff.js" "$@"
       ;;

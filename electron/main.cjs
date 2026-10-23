@@ -12,6 +12,7 @@ const {
   ipcMain,
   Menu,
   nativeTheme,
+  powerMonitor,
   screen,
   shell,
 } = require('electron');
@@ -114,7 +115,12 @@ const {
   writeMarkdownDocument,
 } = require('./markdown-document.cjs');
 const { readRepositoryFile, writeRepositoryFile } = require('./repository-file.cjs');
-const { isRemoteRepositoryPath, resolveRepositoryPath } = require('./remote-repository.cjs');
+const { createRemoteHelperWatcher } = require('./remote-helper.cjs');
+const {
+  formatRemoteRepositoryPath,
+  isRemoteRepositoryPath,
+  resolveRepositoryPath,
+} = require('./remote-repository.cjs');
 const {
   createRepositoryWatcherCoordinator,
   readRepositoryWatcherSnapshot,
@@ -606,6 +612,22 @@ const buildModelSubmenu = () => {
     type: 'radio',
   }));
 };
+
+// `codiff -r` on a machine listed in settings.remoteHelperHosts opens its
+// repository here. Codiff keeps an SSH connection to each of those machines.
+const remoteHelperWatcher = createRemoteHelperWatcher({
+  onOpen: (host, path) => {
+    focusOrCreateWindow(formatRemoteRepositoryPath({ destination: host, path }), {
+      repositoryPathProvided: true,
+      walkthrough: false,
+    });
+  },
+  onStatusChange: (host, status) => {
+    if (!status.connected && status.lastError) {
+      console.warn(`Codiff remote helper for ${host} disconnected: ${status.lastError}`);
+    }
+  },
+});
 
 const loadCodexModels = () => {
   codexModelDiscovery ??= readCodexModels({ signal: codexModelDiscoveryAbort.signal })
@@ -1496,10 +1518,17 @@ if (squirrelStartup || !lock) {
       sendConfigChanged();
       Menu.setApplicationMenu(buildApplicationMenu());
       if (previousAgent !== 'codex' && getActiveAgent()?.id === 'codex') void loadCodexModels();
+      remoteHelperWatcher.update(config.settings.remoteHelperHosts);
     });
+    remoteHelperWatcher.update(config.settings.remoteHelperHosts);
+    // Network connections rarely survive sleep; reconnect instead of waiting for a timeout.
+    powerMonitor.on('resume', () => remoteHelperWatcher.reconnect());
   });
 
-  app.on('will-quit', () => codexModelDiscoveryAbort.abort());
+  app.on('will-quit', () => {
+    codexModelDiscoveryAbort.abort();
+    remoteHelperWatcher.close();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

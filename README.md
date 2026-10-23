@@ -96,6 +96,27 @@ so authenticate with keys or an agent; password prompts are not supported. Conne
 for five minutes. Set `CODIFF_SSH_PATH` to use another `ssh` executable. Walkthroughs, the review
 assistant, sharing and opening files in an editor are not available for remote repositories yet.
 
+You can also start from the other machine. Install the remote helper once from the machine that
+runs Codiff:
+
+```bash
+codiff --install-remote-helper devbox
+```
+
+This copies a small `codiff` script to `~/.local/bin` on `devbox` and adds `devbox` to
+`settings.remoteHelperHosts`. Then run this in a repository on `devbox`, however you connected to
+it (`ssh`, mosh, an old tmux session…):
+
+```bash
+codiff -r
+```
+
+Codiff opens that repository as if you had run `codiff --remote devbox:<path>`. While it runs,
+Codiff keeps one SSH connection to each listed host and picks up the requests `codiff -r` leaves in
+`~/.codiff/requests` there. It reconnects with backoff when the network drops and right after the
+computer wakes up. A host can only open its own repositories, and `codiff -r` reports when Codiff
+is not connected instead of leaving the request for later.
+
 Show all available options:
 
 ```bash

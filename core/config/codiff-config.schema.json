@@ -89,6 +89,12 @@
           "default": "pi-default",
           "description": "The Pi model to use for review assistance and walkthroughs when agentBackend is 'pi'."
         },
+        "remoteHelperHosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "SSH host aliases where `codiff -r` opens repositories in this Codiff. While running, Codiff keeps an SSH connection to each host to pick up its requests. Add hosts with `codiff --install-remote-helper <alias>`."
+        },
         "renderMarkdownAs": {
           "type": "string",
           "enum": ["preview", "source"],

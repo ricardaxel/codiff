@@ -51,6 +51,12 @@ export const flagDefinitions = [
   },
   { description: 'Show this help message and exit.', name: 'help', short: 'h', type: 'boolean' },
   {
+    argument: '<host>',
+    description: 'Let `codiff -r` on an SSH host open its repositories here.',
+    name: 'install-remote-helper',
+    type: 'string',
+  },
+  {
     argument: '<id>',
     description: 'Attach OpenCode session metadata to a walkthrough.',
     name: 'opencode-session',
@@ -448,6 +454,7 @@ export const parseArguments = (args) => {
     values.help === true ||
     values.version === true ||
     values.completions !== undefined ||
+    values['install-remote-helper'] !== undefined ||
     values['walkthrough-guide'] === true;
   const remoteRepositoryPath =
     values.remote === undefined || exitsEarly
@@ -495,6 +502,14 @@ export const parseArguments = (args) => {
     commitRef,
     ...(completionShell === null ? {} : { completionShell }),
     help: values.help === true,
+    ...(values['install-remote-helper'] === undefined
+      ? {}
+      : {
+          installRemoteHelperHost:
+            typeof values['install-remote-helper'] === 'string'
+              ? values['install-remote-helper']
+              : '',
+        }),
     ...(pullRequestBranch ? { pullRequestBranch } : {}),
     pullRequestNumber,
     ...(pullRequestProvider ? { pullRequestProvider } : {}),

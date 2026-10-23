@@ -119,7 +119,7 @@ const getRemoteShellCommand = () => process.env.CODIFF_SSH_PATH || 'ssh';
 /**
  * @param {RemoteRepository} remote
  * @param {ReadonlyArray<string>} argv
- * @param {{tty?: boolean}} [options]
+ * @param {{keepAlive?: boolean; tty?: boolean}} [options]
  */
 const getRemoteShellArgs = (remote, argv, options = {}) => [
   // Codiff has no terminal to prompt in: authentication must use keys or an agent.
@@ -130,6 +130,8 @@ const getRemoteShellArgs = (remote, argv, options = {}) => [
     ? []
     : ['-o', 'ControlMaster=auto', '-o', 'ControlPath=/tmp/codiff-%C', '-o', 'ControlPersist=300']),
   ...(remote.port ? ['-p', String(remote.port)] : []),
+  // Long-lived commands notice a dead network within ~90 seconds.
+  ...(options.keepAlive ? ['-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=3'] : []),
   ...(options.tty ? ['-tt'] : []),
   '--',
   remote.destination,
@@ -191,17 +193,31 @@ const execGitSync = (repoPath, args, options = {}) => {
 };
 
 /**
+ * Start a long-running command on the remote host.
+ *
+ * @param {RemoteRepository} remote
+ * @param {ReadonlyArray<string>} argv
+ * @param {{keepAlive?: boolean}} [options]
+ */
+const spawnRemoteCommand = (remote, argv, options = {}) =>
+  spawn(getRemoteShellCommand(), getRemoteShellArgs(remote, argv, options), {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+/**
  * Run a command on the remote host and collect its stdout.
  *
  * @param {RemoteRepository} remote
  * @param {ReadonlyArray<string>} argv
+ * @param {string | Buffer} [input] Sent to the remote command's stdin.
  * @returns {Promise<Buffer>}
  */
-const runRemoteCommand = (remote, argv) =>
+const runRemoteCommand = (remote, argv, input) =>
   new Promise((resolve, reject) => {
     const child = spawn(getRemoteShellCommand(), getRemoteShellArgs(remote, argv), {
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [input == null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     });
+    child.stdin?.end(input);
     /** @type {Array<Buffer>} */
     const stdout = [];
     /** @type {Array<Buffer>} */
@@ -397,4 +413,6 @@ module.exports = {
   resolveRemoteLaunchPath,
   resolveRemoteRepositoryRoot,
   resolveRepositoryPath,
+  runRemoteCommand,
+  spawnRemoteCommand,
 };

@@ -172,6 +172,10 @@ is running so changes apply to open windows.
 Set `settings.showWhitespace` to `true` to show whitespace-only changes in diffs and file line
 counts; when it is `false`, Codiff hides those changes from the working-tree review state.
 
+Set `settings.showUntracked` to `false`, choose `View > Diff > Show Untracked Files`, or use Toggle
+Untracked Files in the command bar to hide untracked files from working-tree reviews. The setting is
+independent of Git's `status.showUntrackedFiles`.
+
 ```jsonc
 {
   "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json",
@@ -188,6 +192,7 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "openAIReasoningEffort": "",
     "opencodeModel": "opencode-default",
     "sidebarPosition": "left",
+    "showUntracked": true,
     "showWhitespace": false,
     "theme": "system",
     "walkthroughPrompt": "",

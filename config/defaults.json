@@ -19,6 +19,7 @@
     "reviewCommentsPrefix": "# Address these Review Comments",
     "sidebarPosition": "left",
     "showOutdated": false,
+    "showUntracked": true,
     "showWhitespace": false,
     "theme": "system",
     "walkthroughPrompt": "",

@@ -625,7 +625,7 @@ const mergeBranchAndWorkingTreeState = (branchState, workingTreeState) => {
 /**
  * @param {string} launchPath
  * @param {string | BranchSource | BranchDiffSource | BranchWorkingTreeSource} input
- * @param {{showWhitespace?: boolean}} [options]
+ * @param {{showUntracked?: boolean; showWhitespace?: boolean}} [options]
  * @returns {Promise<RepositoryState>}
  */
 const readBranchWorkingTreeState = async (launchPath, input, options = {}) => {
@@ -633,6 +633,7 @@ const readBranchWorkingTreeState = async (launchPath, input, options = {}) => {
     readBranchState(launchPath, toBranchComparisonInput(input)),
     readWorkingTreeState(launchPath, {
       eagerContents: false,
+      showUntracked: options.showUntracked,
       showWhitespace: options.showWhitespace,
     }),
   ]);

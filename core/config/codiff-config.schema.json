@@ -117,6 +117,11 @@
           "default": false,
           "description": "Show review comments anchored to outdated diff lines. Hidden by default, matching GitHub's review UI."
         },
+        "showUntracked": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show untracked files in working tree reviews. This is independent of Git's `status.showUntrackedFiles`."
+        },
         "showWhitespace": {
           "type": "boolean",
           "default": false,

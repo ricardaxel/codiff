@@ -213,6 +213,7 @@ const getActiveAgent = () => getEnabledAgent(config.settings.agentBackend);
 /** @param {string} repositoryPath @param {ReviewSource} [source] */
 const readRepositoryStateWithConfig = (repositoryPath, source) =>
   readRepositoryState(repositoryPath, source, {
+    showUntracked: config.settings.showUntracked,
     showWhitespace: config.settings.showWhitespace,
   });
 
@@ -220,6 +221,7 @@ const readRepositoryStateWithConfig = (repositoryPath, source) =>
 const readInitialRepositoryStateWithConfig = (repositoryPath, launchOptions) =>
   launchOptions.walkthrough && !launchOptions.walkthroughFile
     ? readWalkthroughRepositoryState(repositoryPath, launchOptions.source, {
+        showUntracked: config.settings.showUntracked,
         showWhitespace: config.settings.showWhitespace,
       })
     : readRepositoryStateWithConfig(repositoryPath, launchOptions.source);
@@ -518,7 +520,9 @@ const readSafeRepositoryWatcherSnapshot = async (
   knownDirtyPaths = [],
 ) => {
   try {
-    return await readRepositoryWatcherSnapshot(repositoryRoot, exactPaths, knownDirtyPaths);
+    return await readRepositoryWatcherSnapshot(repositoryRoot, exactPaths, knownDirtyPaths, {
+      showUntracked: config.settings.showUntracked,
+    });
   } catch (error) {
     return {
       head: `error:${error instanceof Error ? error.message : String(error)}`,
@@ -869,6 +873,16 @@ const buildApplicationMenu = () =>
                   });
                 },
                 label: 'Show Whitespace',
+                type: 'checkbox',
+              },
+              {
+                checked: config.settings.showUntracked,
+                click: (menuItem) => {
+                  updateConfig({
+                    settings: { ...config.settings, showUntracked: menuItem.checked },
+                  });
+                },
+                label: 'Show Untracked Files',
                 type: 'checkbox',
               },
               {
@@ -2150,6 +2164,10 @@ ipcMain.handle('codiff:setDiffStyle', (_event, value) => {
 
 ipcMain.handle('codiff:setShowOutdated', (_event, value) => {
   updateConfig({ settings: { ...config.settings, showOutdated: Boolean(value) } });
+});
+
+ipcMain.handle('codiff:setShowUntracked', (_event, value) => {
+  updateConfig({ settings: { ...config.settings, showUntracked: Boolean(value) } });
 });
 
 ipcMain.handle('codiff:setWordWrap', (_event, value) => {

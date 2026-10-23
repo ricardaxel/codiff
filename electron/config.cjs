@@ -348,6 +348,10 @@ const mergeConfig = (raw) => {
         typeof rawSettings.showOutdated === 'boolean'
           ? rawSettings.showOutdated
           : defaults.settings.showOutdated,
+      showUntracked:
+        typeof rawSettings.showUntracked === 'boolean'
+          ? rawSettings.showUntracked
+          : defaults.settings.showUntracked,
       showWhitespace:
         typeof rawSettings.showWhitespace === 'boolean'
           ? rawSettings.showWhitespace

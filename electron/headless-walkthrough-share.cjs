@@ -110,6 +110,7 @@ const uploadWalkthrough = async ({
         codeFontFamily: config.settings.codeFontFamily,
         codeFontSize: config.settings.codeFontSize,
         diffStyle: config.settings.diffStyle,
+        showUntracked: config.settings.showUntracked,
         showWhitespace: config.settings.showWhitespace,
         theme: config.settings.theme,
         wordWrap: config.settings.wordWrap,
@@ -134,6 +135,7 @@ const uploadWalkthrough = async ({
 const readShareState = async (repositoryPath, source, config) =>
   Promise.all([
     readRepositoryState(repositoryPath, source, {
+      showUntracked: config.settings.showUntracked,
       showWhitespace: config.settings.showWhitespace,
     }),
     readGitIdentity(repositoryPath),
@@ -147,6 +149,7 @@ const readShareState = async (repositoryPath, source, config) =>
 const readGeneratedShareState = async (repositoryPath, source, config) =>
   Promise.all([
     readWalkthroughRepositoryState(repositoryPath, source, {
+      showUntracked: config.settings.showUntracked,
       showWhitespace: config.settings.showWhitespace,
     }),
     readGitIdentity(repositoryPath),

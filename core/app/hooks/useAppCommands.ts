@@ -202,6 +202,17 @@ export function useAppCommands({
         title: 'Toggle Word Wrap',
       }),
       registry.register({
+        description: () =>
+          preferencesRef.current.showUntracked ? 'Hide Untracked Files' : 'Show Untracked Files',
+        execute: () => {
+          void window.codiff
+            .setShowUntracked(!preferencesRef.current.showUntracked)
+            .catch(() => {});
+        },
+        id: 'toggle-untracked-files',
+        title: 'Toggle Untracked Files',
+      }),
+      registry.register({
         execute: () => {
           void window.codiff.increaseCodeFontSize().catch(() => {});
         },

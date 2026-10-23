@@ -116,6 +116,7 @@ test('app commands register the complete command set and delegate dynamic action
     'toggle-outdated-comments',
     'toggle-diff-layout',
     'toggle-word-wrap',
+    'toggle-untracked-files',
     'increase-code-font-size',
     'decrease-code-font-size',
     'reset-code-font-size',
@@ -153,6 +154,9 @@ test('app commands register the complete command set and delegate dynamic action
   expect(command('toggle-word-wrap').description?.()).toBe('Enable Word Wrap');
   preferencesRef.current.wordWrap = true;
   expect(command('toggle-word-wrap').description?.()).toBe('Disable Word Wrap');
+  expect(command('toggle-untracked-files').description?.()).toBe('Hide Untracked Files');
+  preferencesRef.current.showUntracked = false;
+  expect(command('toggle-untracked-files').description?.()).toBe('Show Untracked Files');
 });
 
 test('app commands omit the walkthrough while AI features are turned off', async () => {

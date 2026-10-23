@@ -23,6 +23,7 @@ export type CodiffSettings = {
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
   showOutdated: boolean;
+  showUntracked: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';
   theme: CodiffTheme;

@@ -1092,13 +1092,17 @@ export default function App({
     }
 
     const removeConfigListener = window.codiff.onConfigChanged((nextConfig) => {
-      const previousShowWhitespace = preferencesRef.current.showWhitespace;
+      const previousPreferences = preferencesRef.current;
       const nextPreferences = getPreferencesFromConfig(nextConfig);
       preferencesRef.current = nextPreferences;
       setCodiffConfig(nextConfig);
       setPreferences(nextPreferences);
 
-      if (previousShowWhitespace === nextPreferences.showWhitespace) {
+      // These settings change which files and lines Git reports, so reload the state.
+      if (
+        previousPreferences.showWhitespace === nextPreferences.showWhitespace &&
+        previousPreferences.showUntracked === nextPreferences.showUntracked
+      ) {
         return;
       }
 
@@ -2124,6 +2128,11 @@ export default function App({
               ) : (
                 <span>{emptySourceDetail.text}</span>
               )}
+              {!preferences.showUntracked &&
+              (state.source.type === 'working-tree' ||
+                state.source.type === 'branch-working-tree') ? (
+                <span>Untracked files are hidden.</span>
+              ) : null}
             </div>
           </div>
         ) : visibleFiles.length === 0 ? (

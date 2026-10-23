@@ -356,6 +356,10 @@ const mergeConfig = (raw) => {
         typeof rawSettings.showWhitespace === 'boolean'
           ? rawSettings.showWhitespace
           : defaults.settings.showWhitespace,
+      syntaxHighlighter:
+        rawSettings.syntaxHighlighter === 'highlights' || rawSettings.syntaxHighlighter === 'shiki'
+          ? rawSettings.syntaxHighlighter
+          : 'auto',
       theme: normalizeTheme(rawSettings.theme),
       walkthroughPrompt:
         typeof rawSettings.walkthroughPrompt === 'string'

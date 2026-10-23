@@ -173,6 +173,7 @@ const codiff = {
   setDiffStyle: (value) => ipcRenderer.invoke('codiff:setDiffStyle', value),
   setShowOutdated: (value) => ipcRenderer.invoke('codiff:setShowOutdated', value),
   setShowUntracked: (value) => ipcRenderer.invoke('codiff:setShowUntracked', value),
+  setSyntaxHighlighter: (value) => ipcRenderer.invoke('codiff:setSyntaxHighlighter', value),
   setWordWrap: (value) => ipcRenderer.invoke('codiff:setWordWrap', value),
   sharePlan: (review) => ipcRenderer.invoke('codiff:sharePlan', review),
   shareWalkthrough: (snapshot) => ipcRenderer.invoke('codiff:shareWalkthrough', snapshot),

@@ -127,6 +127,12 @@
           "default": false,
           "description": "Show whitespace-only changes in diffs and file line counts."
         },
+        "syntaxHighlighter": {
+          "type": "string",
+          "enum": ["auto", "highlights", "shiki"],
+          "default": "auto",
+          "description": "Syntax highlighting engine. 'highlights' is fast but colors fewer languages (no D, for example); 'shiki' colors almost every language but is slower; 'auto' uses 'highlights' unless a file in the review needs a language only Shiki supports."
+        },
         "theme": {
           "type": "string",
           "enum": ["system", "light", "dark"],

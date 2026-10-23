@@ -1,5 +1,9 @@
 import type { MarkdownAnnotationAnchor } from '@nkzw/mdx-editor';
-import type { CodiffAgentBackend, CodiffDiffStyle } from './config/types.ts';
+import type {
+  CodiffAgentBackend,
+  CodiffDiffStyle,
+  CodiffSyntaxHighlighter,
+} from './config/types.ts';
 
 export type DiffSection = {
   binary: boolean;
@@ -811,6 +815,7 @@ export type CodiffPreferences = {
   showUntracked: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';
+  syntaxHighlighter: CodiffSyntaxHighlighter;
   theme: CodiffTheme;
   walkthroughPrompt: string;
   wordWrap: boolean;

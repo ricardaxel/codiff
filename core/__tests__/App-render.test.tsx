@@ -193,6 +193,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
     showUntracked: true,
     showWhitespace: false,
     sidebarPosition: defaultSettings.sidebarPosition,
+    syntaxHighlighter: 'auto' as const,
     theme: 'system' as const,
     walkthroughPrompt: defaultSettings.walkthroughPrompt,
     wordWrap: false,
@@ -267,6 +268,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   setDiffStyle: vi.fn(async () => {}),
   setShowOutdated: vi.fn(async () => {}),
   setShowUntracked: vi.fn(async () => {}),
+  setSyntaxHighlighter: vi.fn(async () => {}),
   setWordWrap: vi.fn(async () => {}),
   sharePlan: vi.fn(async () => ({
     status: 'uploaded' as const,

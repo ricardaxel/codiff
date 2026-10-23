@@ -195,6 +195,7 @@ export function ReviewCodeViewHarness({ files, ...overrides }: ReviewCodeViewHar
       focusCommentRequest={0}
       forceExpandedPaths={new Set()}
       gitIdentity={null}
+      highlighter="highlights"
       hunkNavigation={null}
       itemVersionByKey={{}}
       keymap={defaultKeymap}

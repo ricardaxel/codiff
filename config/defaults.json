@@ -18,6 +18,7 @@
     "renderMarkdownAs": "preview",
     "reviewCommentsPrefix": "# Address these Review Comments",
     "sidebarPosition": "left",
+    "syntaxHighlighter": "auto",
     "showOutdated": false,
     "showUntracked": true,
     "showWhitespace": false,

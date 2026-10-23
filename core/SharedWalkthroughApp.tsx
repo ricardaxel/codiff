@@ -34,6 +34,7 @@ import {
 import { useNarrativeNavigation } from './app/components/walkthrough/useNarrativeNavigation.ts';
 import { WalkthroughDiffSurface } from './app/components/walkthrough/WalkthroughDiffSurface.tsx';
 import { WalkthroughProgress } from './app/components/walkthrough/WalkthroughProgress.tsx';
+import { useCodeViewHighlighter } from './app/hooks/useCodeViewHighlighter.ts';
 import {
   getCodeFontLineHeight,
   normalizeCodeFontSizePreference,
@@ -417,6 +418,9 @@ export function ReviewSurface({
   const interactiveRef = useRef(interactive);
   const handledHashTargetRef = useRef<string | null>(null);
 
+  const reviewPaths = useMemo(() => snapshot.files.map((file) => file.path), [snapshot.files]);
+  // Shared snapshots do not carry the viewer's setting, so they always choose automatically.
+  const highlighter = useCodeViewHighlighter('auto', reviewPaths);
   const visibleFiles = useMemo(
     () =>
       sortFiles(snapshot.files).filter(
@@ -853,7 +857,9 @@ export function ReviewSurface({
   );
   const activateHashTarget = useCallback(() => {
     const target = getLocationHashTarget();
-    if (!target || handledHashTargetRef.current === target) {
+    // Wait for the diffs to mount: a resolved thread only expands for focus
+    // requests made after it renders.
+    if (!target || handledHashTargetRef.current === target || !highlighter) {
       return;
     }
 
@@ -876,7 +882,13 @@ export function ReviewSurface({
         return;
       }
     }
-  }, [activateGeneralComment, activateReviewComment, generalCommentThreads, reviewComments]);
+  }, [
+    activateGeneralComment,
+    activateReviewComment,
+    generalCommentThreads,
+    highlighter,
+    reviewComments,
+  ]);
   useEffect(() => {
     const timeout = window.setTimeout(activateHashTarget, 0);
     return () => window.clearTimeout(timeout);
@@ -922,6 +934,7 @@ export function ReviewSurface({
     focusCommentId,
     focusCommentRequest,
     gitIdentity,
+    highlighter,
     hunkNavigation: null,
     initialMarkdownPreviewSectionIds,
     isReadOnly: !canComment,

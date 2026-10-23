@@ -886,6 +886,20 @@ const buildApplicationMenu = () =>
                 type: 'checkbox',
               },
               {
+                label: 'Syntax Highlighting',
+                submenu: /** @type {const} */ ([
+                  ['auto', 'Automatic'],
+                  ['highlights', 'Fast'],
+                  ['shiki', 'Shiki (More Languages)'],
+                ]).map(([value, label]) => ({
+                  checked: config.settings.syntaxHighlighter === value,
+                  click: () =>
+                    updateConfig({ settings: { ...config.settings, syntaxHighlighter: value } }),
+                  label,
+                  type: /** @type {const} */ ('radio'),
+                })),
+              },
+              {
                 checked: config.settings.expandUnchanged,
                 click: (menuItem) => {
                   updateConfig({
@@ -2164,6 +2178,15 @@ ipcMain.handle('codiff:setDiffStyle', (_event, value) => {
 
 ipcMain.handle('codiff:setShowOutdated', (_event, value) => {
   updateConfig({ settings: { ...config.settings, showOutdated: Boolean(value) } });
+});
+
+ipcMain.handle('codiff:setSyntaxHighlighter', (_event, value) => {
+  updateConfig({
+    settings: {
+      ...config.settings,
+      syntaxHighlighter: value === 'highlights' || value === 'shiki' ? value : 'auto',
+    },
+  });
 });
 
 ipcMain.handle('codiff:setShowUntracked', (_event, value) => {

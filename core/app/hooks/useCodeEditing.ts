@@ -30,7 +30,11 @@ import { defaultKeymap } from '../../config/defaults.ts';
 import { matchesShortcut } from '../../config/keymap.ts';
 import type { CodiffKeymap } from '../../config/types.ts';
 import type { CodeViewItemMetadata, ReviewAnnotationMetadata } from '../../lib/app-types.ts';
-import { DEFAULT_PADDING, workerHighlighterOptions } from '../../lib/code-view-options.ts';
+import {
+  DEFAULT_PADDING,
+  getActiveCodeViewHighlighter,
+  getWorkerHighlighterOptions,
+} from '../../lib/code-view-options.ts';
 import { loadSectionContents } from '../../lib/diff.ts';
 import { getItemVersion } from '../../lib/item-version.ts';
 import { isNativeInputTarget } from '../../lib/keyboard.ts';
@@ -62,7 +66,9 @@ const prepareEditor = (fileDiff: FileDiffMetadata) => {
   const lang = fileDiff.lang ?? getFiletypeFromFileName(fileDiff.name);
   return Promise.all([
     loadEditor(),
-    preloadHighlighter(getHighlighterOptions(lang, workerHighlighterOptions)),
+    preloadHighlighter(
+      getHighlighterOptions(lang, getWorkerHighlighterOptions(getActiveCodeViewHighlighter())),
+    ),
   ]);
 };
 

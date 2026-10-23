@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import type { CodiffSyntaxHighlighter } from '../../config/types.ts';
 import type { ReviewComment, ReviewIdentity, SidebarMode } from '../../lib/app-types.ts';
 import { createCommandRegistry, type Command } from '../../lib/command-registry.ts';
 import type { ReviewCommandTarget } from '../../lib/review-command-target.ts';
@@ -10,6 +11,18 @@ import type {
   OpenReviewSourceKind,
   RepositoryState,
 } from '../../types.ts';
+
+const syntaxHighlighterOrder = ['auto', 'highlights', 'shiki'] as const;
+const syntaxHighlighterLabels: Record<CodiffSyntaxHighlighter, string> = {
+  auto: 'Automatic',
+  highlights: 'Fast',
+  shiki: 'Shiki',
+};
+
+const getNextSyntaxHighlighter = (current: CodiffSyntaxHighlighter) =>
+  syntaxHighlighterOrder[
+    (syntaxHighlighterOrder.indexOf(current) + 1) % syntaxHighlighterOrder.length
+  ];
 
 type UseAppCommandsOptions = {
   changeSidebarMode: (mode: SidebarMode) => void;
@@ -211,6 +224,19 @@ export function useAppCommands({
         },
         id: 'toggle-untracked-files',
         title: 'Toggle Untracked Files',
+      }),
+      registry.register({
+        description: () =>
+          `Use ${syntaxHighlighterLabels[getNextSyntaxHighlighter(preferencesRef.current.syntaxHighlighter)]}`,
+        execute: () => {
+          void window.codiff
+            .setSyntaxHighlighter(
+              getNextSyntaxHighlighter(preferencesRef.current.syntaxHighlighter),
+            )
+            .catch(() => {});
+        },
+        id: 'change-syntax-highlighter',
+        title: 'Change Syntax Highlighting',
       }),
       registry.register({
         execute: () => {

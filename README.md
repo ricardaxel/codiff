@@ -176,6 +176,14 @@ Set `settings.showUntracked` to `false`, choose `View > Diff > Show Untracked Fi
 Untracked Files in the command bar to hide untracked files from working-tree reviews. The setting is
 independent of Git's `status.showUntrackedFiles`.
 
+Codiff highlights syntax with a fast engine that covers the most common languages. Languages it
+lacks, such as D, would show as plain text, so with `settings.syntaxHighlighter` set to `auto` (the
+default) a window switches to [Shiki](https://shiki.style/), which colors almost every language but
+is slower, whenever its review contains such a file. Set it to `highlights` to always use the fast
+engine or `shiki` to always use Shiki, from the config file, `View > Diff > Syntax Highlighting`, or
+Change Syntax Highlighting in the command bar. Shiki currently uses the GitHub Light and Dark
+themes.
+
 ```jsonc
 {
   "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json",
@@ -192,6 +200,7 @@ independent of Git's `status.showUntrackedFiles`.
     "openAIReasoningEffort": "",
     "opencodeModel": "opencode-default",
     "sidebarPosition": "left",
+    "syntaxHighlighter": "auto",
     "showUntracked": true,
     "showWhitespace": false,
     "theme": "system",

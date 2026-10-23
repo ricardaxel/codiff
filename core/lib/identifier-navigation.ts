@@ -86,13 +86,17 @@ const commonKeywords = new Set([
 const identifierNavigationAttribute = 'data-codiff-identifier';
 const definitionModifierAttribute = 'data-codiff-definition-mode';
 const nonCodeScopePattern = /^(comment|string)(\.|$)/;
-const nonCodeTokenColors = new Set(
-  [dunkelTheme, lichtTheme].flatMap((theme) =>
+const nonCodeTokenColors = new Set([
+  ...[dunkelTheme, lichtTheme].flatMap((theme) =>
     Object.entries(theme.style.syntax).flatMap(([scope, token]) =>
       nonCodeScopePattern.test(scope) ? [token.color.toLowerCase()] : [],
     ),
   ),
-);
+  // Comment and string colors of the GitHub themes Shiki uses.
+  '#6a737d',
+  '#032f62',
+  '#9ecbff',
+]);
 
 export const isNavigableIdentifierToken = (text: string) => {
   return exactIdentifierPattern.test(text) && !commonKeywords.has(text.toLowerCase());

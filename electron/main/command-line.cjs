@@ -1,9 +1,13 @@
 // @ts-check
 
-const { execFileSync } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { parseArgs } = require('node:util');
+const {
+  execGitSync,
+  resolveRemoteLaunchPath,
+  resolveRepositoryPath,
+} = require('../remote-repository.cjs');
 const { readWalkthroughContext } = require('../walkthrough-context.cjs');
 const { parseReviewUrl, resolveReviewUrl } = require('../review-source.cjs');
 
@@ -43,7 +47,7 @@ const parseRangeArgument = (arg) => {
 /** @param {string} repositoryPath @param {ReadonlyArray<string>} args */
 const gitSucceeds = (repositoryPath, args) => {
   try {
-    execFileSync('git', ['-C', repositoryPath, ...args], {
+    execGitSync(repositoryPath, args, {
       stdio: ['ignore', 'ignore', 'ignore'],
     });
     return true;
@@ -151,6 +155,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       'walkthrough-file': {
         type: 'string',
       },
+      remote: {
+        type: 'string',
+      },
     },
     strict: false,
   });
@@ -213,9 +220,16 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     }
   }
 
+  // A remote target replaces any positional repository path.
+  const remoteRepositoryPath =
+    typeof values.remote === 'string' ? resolveRemoteLaunchPath(values.remote) : null;
+  if (remoteRepositoryPath) {
+    repositoryPath = remoteRepositoryPath;
+  }
+
   let range = null;
   if (rangeCandidate) {
-    const rangeRepo = resolve(repositoryPath || process.cwd());
+    const rangeRepo = resolveRepositoryPath(repositoryPath || process.cwd());
     range =
       isCommitRef(rangeRepo, rangeCandidate.base) && isCommitRef(rangeRepo, rangeCandidate.head)
         ? rangeCandidate
@@ -224,7 +238,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
 
   if (!range && !commitRef && !branchRef && sourceCandidate) {
     const source = resolveSourceCandidate(
-      resolve(repositoryPath || process.cwd()),
+      resolveRepositoryPath(repositoryPath || process.cwd()),
       sourceCandidate,
     );
     if (source?.branchRef) {
@@ -233,7 +247,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       commitRef = source.commitRef;
     } else if (repositoryPath == null && existsSync(resolve(sourceCandidate))) {
       repositoryPath = sourceCandidate;
-    } else if (isGitRepository(resolve(repositoryPath || process.cwd()))) {
+    } else if (isGitRepository(resolveRepositoryPath(repositoryPath || process.cwd()))) {
       branchRef = sourceCandidate;
     } else if (repositoryPath == null) {
       repositoryPath = sourceCandidate;
@@ -380,7 +394,7 @@ const getCommandLineLaunchOptions = (commandLine = process.argv, fallbackPath = 
     source: {
       type: 'pull-request',
       url: resolvePullRequestUrl(
-        resolve(
+        resolveRepositoryPath(
           (commandLine === process.argv ? process.env.CODIFF_REPOSITORY_PATH : '') ||
             repositoryPath ||
             fallbackPath,
@@ -394,7 +408,9 @@ const getCommandLineLaunchOptions = (commandLine = process.argv, fallbackPath = 
 };
 
 const getLaunchPath = () =>
-  resolve(process.env.CODIFF_REPOSITORY_PATH || getCommandLineRepositoryPath() || process.cwd());
+  resolveRepositoryPath(
+    process.env.CODIFF_REPOSITORY_PATH || getCommandLineRepositoryPath() || process.cwd(),
+  );
 
 /**
  * @param {string} launchPath

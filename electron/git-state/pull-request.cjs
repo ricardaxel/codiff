@@ -5,6 +5,7 @@ const { homedir } = require('node:os');
 const { join } = require('node:path');
 const { findExecutableOnPath, isExecutableFile } = require('../agent-shared.cjs');
 const { getCommandEnvironment } = require('../login-shell-environment.cjs');
+const { isRemoteRepositoryPath } = require('../remote-repository.cjs');
 const {
   IMAGE_FILE_LIMIT,
   bufferToImageRevision,
@@ -281,7 +282,8 @@ const runGhApi = async (repoRoot, args, input) => {
   const environment = await getCommandEnvironment();
   return new Promise((resolve, reject) => {
     const child = spawn(getGhCommand(), ['api', ...args], {
-      cwd: repoRoot,
+      // Remote repositories have no local directory; the API calls name the repository.
+      cwd: isRemoteRepositoryPath(repoRoot) ? undefined : repoRoot,
       env: environment,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

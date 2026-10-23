@@ -205,6 +205,7 @@ show_help() {
   printf '  %-38s%s%s%s\n' "--opencode-session <id>" "$gray" "Attach OpenCode session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--pi-session <id>" "$gray" "Attach Pi session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--plan <file>" "$gray" "Edit a Markdown plan and wait until it is handed back." "$reset"
+  printf '  %-38s%s%s%s\n' "--remote <[user@]host:path>" "$gray" "Review a repository on another machine over SSH." "$reset"
   printf '  %-38s%s%s%s\n' "--share" "$gray" "Share a walkthrough or a --plan file, then print its URL." "$reset"
   printf '  %-38s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
   printf '  %-38s%s%s%s\n' "--walkthrough, -w" "$gray" "Start an LLM walkthrough; use HEAD when there are no local changes." "$reset"
@@ -256,6 +257,19 @@ for arg in "$@"; do
     --share|--public|--completions|--completions=*)
       resolve_runtime "$arg"
       ELECTRON_RUN_AS_NODE=1 exec "$runtime" "$script_dir/codiff.js" "$@"
+      ;;
+  esac
+done
+
+# The app resolves remote repositories itself because refs, paths and pull
+# request numbers must be looked up on the remote host, not in this checkout.
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h|--version|-v|--walkthrough-guide) break ;;
+    --remote|--remote=*)
+      print_update_notice
+      open -n "$app_path" --args "$@"
+      exit 0
       ;;
   esac
 done

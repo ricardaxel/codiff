@@ -5,6 +5,15 @@ const { promises: fs } = require('node:fs');
 const { createHash } = require('node:crypto');
 const { isAbsolute, join, normalize, sep } = require('node:path');
 const { promisify } = require('node:util');
+const {
+  getGitInvocation,
+  mapGitOutput,
+  parseRemoteRepositoryPath,
+  remoteLstat,
+  remoteLstatMany,
+  remoteReadFile,
+  remoteReadlink,
+} = require('../remote-repository.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -56,16 +65,18 @@ const getGravatarHash = (email) =>
  * @returns {Promise<string>}
  */
 const git = async (repoPath, args, options = {}) => {
-  const { stdout } = await execFileAsync('git', ['-C', repoPath, ...args], {
+  const invocation = getGitInvocation(repoPath, args);
+  const { stdout } = await execFileAsync(invocation.command, invocation.args, {
     encoding: options.encoding || 'utf8',
     maxBuffer: 1024 * 1024 * 64,
   });
-  return stdout;
+  return mapGitOutput(invocation, args, stdout);
 };
 
 /** @param {string} repoPath @param {ReadonlyArray<string>} args @returns {Promise<Buffer>} */
 const gitBuffer = async (repoPath, args) => {
-  const { stdout } = await execFileAsync('git', ['-C', repoPath, ...args], {
+  const invocation = getGitInvocation(repoPath, args);
+  const { stdout } = await execFileAsync(invocation.command, invocation.args, {
     encoding: 'buffer',
     maxBuffer: 1024 * 1024 * 64,
   });
@@ -81,7 +92,8 @@ const gitBuffer = async (repoPath, args) => {
  */
 const gitBufferWithInput = (repoPath, args, input, options = {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn('git', ['-C', repoPath, ...args], {
+    const invocation = getGitInvocation(repoPath, args);
+    const child = spawn(invocation.command, invocation.args, {
       env: options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -315,11 +327,42 @@ const validateRepositoryPath = (path) => {
 
 /** @param {string} repoRoot @param {string} path */
 const readFileStat = async (repoRoot, path) => {
+  const remote = parseRemoteRepositoryPath(repoRoot);
   try {
-    return await fs.lstat(join(repoRoot, path));
+    return remote ? await remoteLstat(remote, path) : await fs.lstat(join(repoRoot, path));
   } catch {
     return undefined;
   }
+};
+
+/**
+ * Stat several paths at once; remote repositories use a single round trip.
+ *
+ * @param {string} repoRoot
+ * @param {ReadonlyArray<string>} paths
+ */
+const readFileStats = async (repoRoot, paths) => {
+  const remote = parseRemoteRepositoryPath(repoRoot);
+  if (!remote) {
+    return Promise.all(paths.map((path) => readFileStat(repoRoot, path)));
+  }
+  try {
+    return await remoteLstatMany(remote, paths);
+  } catch {
+    return paths.map(() => undefined);
+  }
+};
+
+/** @param {string} repoRoot @param {string} path */
+const readWorkingTreeBuffer = (repoRoot, path) => {
+  const remote = parseRemoteRepositoryPath(repoRoot);
+  return remote ? remoteReadFile(remote, path) : fs.readFile(join(repoRoot, path));
+};
+
+/** @param {string} repoRoot @param {string} path */
+const readWorkingTreeLink = (repoRoot, path) => {
+  const remote = parseRemoteRepositoryPath(repoRoot);
+  return remote ? remoteReadlink(remote, path) : fs.readlink(join(repoRoot, path));
 };
 
 /** @param {string} repoRoot @param {string} spec */
@@ -409,7 +452,7 @@ const readWorkingTreeImageFile = async (repoRoot, path) => {
     throw new Error(`Image is ${formatBytes(stat.size)}, so Codiff skipped rendering it.`);
   }
 
-  return bufferToImageRevision(path, await fs.readFile(join(repoRoot, path)));
+  return bufferToImageRevision(path, await readWorkingTreeBuffer(repoRoot, path));
 };
 
 /**
@@ -526,7 +569,7 @@ const readWorkingTreeFile = async (repoRoot, path, options = {}) => {
     }
 
     if (stat.isSymbolicLink()) {
-      const contents = await fs.readlink(join(repoRoot, path));
+      const contents = await readWorkingTreeLink(repoRoot, path);
       const size = Buffer.byteLength(contents);
 
       if (size > limit) {
@@ -584,7 +627,7 @@ const readWorkingTreeFile = async (repoRoot, path, options = {}) => {
       };
     }
 
-    const buffer = await fs.readFile(join(repoRoot, path));
+    const buffer = await readWorkingTreeBuffer(repoRoot, path);
     return bufferToTextFile(path, buffer, `worktree:${path}:${buffer.length}`);
   } catch {
     return {
@@ -882,6 +925,9 @@ module.exports = {
   normalizeStatus,
   parseStatus,
   readFileStat,
+  readFileStats,
+  readWorkingTreeBuffer,
+  readWorkingTreeLink,
   readGitFile,
   readGitImageFile,
   readIndexImageFile,

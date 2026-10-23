@@ -81,6 +81,21 @@ codiff --share
 codiff --share HEAD
 ```
 
+Review a repository on another machine over SSH. Codiff stays local and runs Git on the remote
+host, so only Git output crosses the network:
+
+```bash
+codiff --remote devbox:src/app
+codiff --remote me@devbox:/srv/app main
+codiff --remote ssh://me@devbox:2222/srv/app HEAD~1
+```
+
+Relative paths start from the remote home directory, and refs are resolved on the remote host. The
+remote needs `git` and a POSIX shell. Codiff connects with your `ssh` configuration in batch mode,
+so authenticate with keys or an agent; password prompts are not supported. Connections are reused
+for five minutes. Set `CODIFF_SSH_PATH` to use another `ssh` executable. Walkthroughs, the review
+assistant, sharing and opening files in an editor are not available for remote repositories yet.
+
 Show all available options:
 
 ```bash

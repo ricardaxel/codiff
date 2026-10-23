@@ -1,8 +1,13 @@
 // @ts-check
 
-const { promises: fs } = require('node:fs');
-const { join, sep } = require('node:path');
-const { getFingerprint, git } = require('./git-state/common.cjs');
+const { sep } = require('node:path');
+const {
+  getFingerprint,
+  git,
+  readFileStats,
+  readWorkingTreeBuffer,
+  readWorkingTreeLink,
+} = require('./git-state/common.cjs');
 
 const FOCUSED_POLL_INTERVAL = 2500;
 const HIDDEN_POLL_INTERVAL = 30_000;
@@ -75,11 +80,13 @@ const parseRepositoryWatcherStatus = (raw) => {
  * @param {string} repoRoot
  * @param {string} path
  * @param {boolean} exact
+ * @param {Awaited<ReturnType<typeof readFileStats>>[number]} stat
  */
-const readRepositoryWatcherPathState = async (repoRoot, path, exact) => {
+const readRepositoryWatcherPathState = async (repoRoot, path, exact, stat) => {
   try {
-    const absolutePath = join(repoRoot, path);
-    const stat = await fs.lstat(absolutePath);
+    if (!stat) {
+      return { metadata: `${path}\0missing` };
+    }
     const metadata = `${path}\0${
       stat.isDirectory()
         ? 'directory'
@@ -94,9 +101,9 @@ const readRepositoryWatcherPathState = async (repoRoot, path, exact) => {
     }
 
     const version = stat.isSymbolicLink()
-      ? getFingerprint(await fs.readlink(absolutePath))
+      ? getFingerprint(await readWorkingTreeLink(repoRoot, path))
       : stat.isFile()
-        ? getFingerprint(await fs.readFile(absolutePath))
+        ? getFingerprint(await readWorkingTreeBuffer(repoRoot, path))
         : undefined;
     return { metadata, version };
   } catch {
@@ -129,11 +136,17 @@ const readRepositoryWatcherSnapshot = async (repoRoot, exactPaths = [], knownDir
     [...exactPaths].map((path) => normalizeRepositoryWatcherPath(path)),
   );
   const statusPaths = new Set([...status.paths, ...knownDirtyPathSet]);
-  const paths = new Set([...statusPaths, ...normalizedExactPaths]);
+  const paths = [...new Set([...statusPaths, ...normalizedExactPaths])];
+  const stats = await readFileStats(repoRoot, paths);
   const states = await Promise.all(
-    [...paths].map(async (path) => [
+    paths.map(async (path, index) => [
       path,
-      await readRepositoryWatcherPathState(repoRoot, path, normalizedExactPaths.has(path)),
+      await readRepositoryWatcherPathState(
+        repoRoot,
+        path,
+        normalizedExactPaths.has(path),
+        stats[index],
+      ),
     ]),
   );
   /** @type {Record<string, string>} */

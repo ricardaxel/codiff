@@ -6,6 +6,7 @@ const { homedir } = require('node:os');
 const { join } = require('node:path');
 const { findExecutableOnPath, isExecutableFile } = require('../agent-shared.cjs');
 const { getCommandEnvironment } = require('../login-shell-environment.cjs');
+const { isRemoteRepositoryPath } = require('../remote-repository.cjs');
 const {
   getFingerprint,
   git,
@@ -113,7 +114,8 @@ const glabApi = async (repoRoot, mergeRequest, args, input) => {
     }
 
     const child = spawn(command, createGlabApiArgs(mergeRequest, args, input), {
-      cwd: repoRoot,
+      // Remote repositories have no local directory; the API calls name the repository.
+      cwd: isRemoteRepositoryPath(repoRoot) ? undefined : repoRoot,
       env: environment,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

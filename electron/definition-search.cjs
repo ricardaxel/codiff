@@ -3,6 +3,7 @@
 const { spawn } = require('node:child_process');
 const { dirname, extname } = require('node:path');
 const { gitOrEmpty, validateRepositoryPath } = require('./git-state/common.cjs');
+const { getGitInvocation } = require('./remote-repository.cjs');
 
 /** @typedef {import('../core/types.ts').DefinitionCandidate} DefinitionCandidate */
 /** @typedef {import('../core/types.ts').DefinitionSearchRequest} DefinitionSearchRequest */
@@ -194,7 +195,8 @@ const runBoundedGitGrep = (
       return;
     }
 
-    const child = spawnProcess('git', ['-C', repoPath, ...args], {
+    const invocation = getGitInvocation(repoPath, args);
+    const child = spawnProcess(invocation.command, invocation.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     /** @type {Array<Buffer>} */

@@ -126,7 +126,14 @@ const run = async () => {
     return;
   }
 
-  const parsedArguments = parseArguments(process.argv.slice(2));
+  let parsedArguments;
+  try {
+    parsedArguments = parseArguments(process.argv.slice(2));
+  } catch (error) {
+    process.stderr.write(`codiff: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+    return;
+  }
 
   if (parsedArguments.help) {
     process.stdout.write(formatHelpText(packageJson.version));
@@ -181,6 +188,7 @@ const run = async () => {
     pullRequestNumber,
     pullRequestProvider,
     range,
+    remote,
     requestedPath,
     share,
     walkthrough,
@@ -188,6 +196,12 @@ const run = async () => {
     walkthroughFilePath,
   } = parsedArguments;
   let { pullRequestUrl } = parsedArguments;
+
+  if (remote && (walkthrough || share || planFilePath || walkthroughFilePath)) {
+    process.stderr.write('codiff: --remote does not support walkthroughs, sharing or plans yet.\n');
+    process.exitCode = 1;
+    return;
+  }
 
   if (planFilePath && (!existsSync(planFilePath) || !/\.md$/i.test(planFilePath))) {
     process.stderr.write(`codiff: plan file not found or not Markdown: ${planFilePath}\n`);

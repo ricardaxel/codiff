@@ -2,8 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import remoteRepository from '../electron/remote-repository.cjs';
 import reviewSource from '../electron/review-source.cjs';
 
+const { execGitSync, parseRemoteTarget, resolveRemoteRepositoryRoot } = remoteRepository;
 const { parseReviewUrl, resolveReviewUrl } = reviewSource;
 
 export const flagDefinitions = [
@@ -65,6 +67,12 @@ export const flagDefinitions = [
     consumesSource: true,
     description: 'Edit a Markdown plan and wait until it is handed back.',
     name: 'plan',
+    type: 'string',
+  },
+  {
+    argument: '<[user@]host:path>',
+    description: 'Review a repository on another machine over SSH.',
+    name: 'remote',
     type: 'string',
   },
   {
@@ -230,7 +238,7 @@ const parseRangeArgument = (arg) => {
 
 const gitSucceeds = (repositoryPath, args) => {
   try {
-    execFileSync('git', ['-C', repositoryPath, ...args], {
+    execGitSync(repositoryPath, args, {
       stdio: ['ignore', 'ignore', 'ignore'],
     });
     return true;
@@ -317,6 +325,19 @@ export const resolvePullRequestTargetUrl = ({ branch, number, provider, reposito
   return number != null ? resolvePullRequestUrl(repositoryPath, number, provider) : null;
 };
 
+const resolveRemoteArgument = (target, requestedPath) => {
+  const remote = target ? parseRemoteTarget(target) : null;
+  if (!remote) {
+    throw new Error(
+      `Invalid --remote target${target ? ` "${target}"` : ''}. Use [user@]host:path or ssh://[user@]host[:port]/path.`,
+    );
+  }
+  if (requestedPath != null) {
+    throw new Error('Put the repository path in --remote instead of passing it separately.');
+  }
+  return resolveRemoteRepositoryRoot(remote);
+};
+
 export const parseArguments = (args) => {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -361,6 +382,7 @@ export const parseArguments = (args) => {
     typeof values['walkthrough-context'] === 'string' ? values['walkthrough-context'] : null;
   const walkthroughFilePath =
     typeof values['walkthrough-file'] === 'string' ? values['walkthrough-file'] : null;
+  const remoteTarget = typeof values.remote === 'string' ? values.remote : null;
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
@@ -421,7 +443,16 @@ export const parseArguments = (args) => {
     }
   }
 
-  const repositoryPath = resolve(requestedPath ?? process.cwd());
+  const exitsEarly =
+    values.help === true ||
+    values.version === true ||
+    values.completions !== undefined ||
+    values['walkthrough-guide'] === true;
+  const remoteRepositoryPath =
+    values.remote === undefined || exitsEarly
+      ? null
+      : resolveRemoteArgument(remoteTarget, requestedPath);
+  const repositoryPath = remoteRepositoryPath ?? resolve(requestedPath ?? process.cwd());
   let range = null;
   if (rangeCandidate) {
     // Only honor the range when both ends resolve in this repository; otherwise
@@ -438,11 +469,15 @@ export const parseArguments = (args) => {
       branchRef = source.branchRef;
     } else if (source?.commitRef) {
       commitRef = source.commitRef;
-    } else if (requestedPath == null && existsSync(resolve(sourceCandidate))) {
+    } else if (
+      !remoteRepositoryPath &&
+      requestedPath == null &&
+      existsSync(resolve(sourceCandidate))
+    ) {
       requestedPath = sourceCandidate;
     } else if (isGitRepository(repositoryPath)) {
       branchRef = sourceCandidate;
-    } else if (requestedPath == null) {
+    } else if (!remoteRepositoryPath && requestedPath == null) {
       requestedPath = sourceCandidate;
     }
   }
@@ -464,7 +499,8 @@ export const parseArguments = (args) => {
     ...(pullRequestProvider ? { pullRequestProvider } : {}),
     pullRequestUrl,
     ...(values.public === true ? { public: true } : {}),
-    requestedPath: resolve(requestedPath ?? process.cwd()),
+    ...(remoteRepositoryPath ? { remote: true } : {}),
+    requestedPath: remoteRepositoryPath ?? resolve(requestedPath ?? process.cwd()),
     ...(values.share === true ? { share: true } : {}),
     version: values.version === true,
     walkthrough: values.walkthrough === true || (values.share === true && !planFilePath),

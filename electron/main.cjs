@@ -113,6 +113,7 @@ const {
   writeMarkdownDocument,
 } = require('./markdown-document.cjs');
 const { readRepositoryFile, writeRepositoryFile } = require('./repository-file.cjs');
+const { isRemoteRepositoryPath, resolveRepositoryPath } = require('./remote-repository.cjs');
 const {
   createRepositoryWatcherCoordinator,
   readRepositoryWatcherSnapshot,
@@ -1395,7 +1396,7 @@ if (squirrelStartup || !lock) {
     const data = /** @type {SingleInstanceAdditionalData} */ (additionalData || {});
     const launchOptions =
       data.launchOptions || getCommandLineLaunchOptions(commandLine, workingDirectory);
-    const launchPath = resolve(
+    const launchPath = resolveRepositoryPath(
       data.repositoryPath || getCommandLineRepositoryPath(commandLine) || workingDirectory,
     );
     focusOrCreateWindow(
@@ -1574,7 +1575,17 @@ ipcMain.handle('codiff:resolvePullRequestUrl', (event, value) => {
   return resolveReviewUrl(repositoryPath, Number(number[1]));
 });
 
+/** @param {number} webContentsId */
+const assertLocalRepositoryFiles = (webContentsId) => {
+  if (isRemoteRepositoryPath(getWindowRepositoryRoot(webContentsId))) {
+    throw new Error('Editing files is not available for remote repositories yet.');
+  }
+};
+
 ipcMain.handle('codiff:getMarkdownDocument', async (event, request) => {
+  if (request?.kind === 'repository') {
+    assertLocalRepositoryFiles(event.sender.id);
+  }
   const document = await readMarkdownDocument(request, getMarkdownDocumentContext(event.sender.id));
   if (request.kind === 'plan' && !planInitialVersions.has(event.sender.id)) {
     planInitialVersions.set(event.sender.id, document.version);
@@ -1583,11 +1594,13 @@ ipcMain.handle('codiff:getMarkdownDocument', async (event, request) => {
   return document;
 });
 
-ipcMain.handle('codiff:getRepositoryFile', (event, path) =>
-  readRepositoryFile(getWindowRepositoryRoot(event.sender.id), path),
-);
+ipcMain.handle('codiff:getRepositoryFile', (event, path) => {
+  assertLocalRepositoryFiles(event.sender.id);
+  return readRepositoryFile(getWindowRepositoryRoot(event.sender.id), path);
+});
 
 ipcMain.handle('codiff:saveRepositoryFile', async (event, request) => {
+  assertLocalRepositoryFiles(event.sender.id);
   const root = getWindowRepositoryRoot(event.sender.id);
   const current = await readRepositoryFile(root, request.path);
   const selfWrite = beginRepositorySelfWrite(event.sender.id, current.path);
@@ -1605,6 +1618,9 @@ ipcMain.handle('codiff:saveRepositoryFile', async (event, request) => {
 });
 
 ipcMain.handle('codiff:saveMarkdownDocument', async (event, request) => {
+  if (request?.kind === 'repository') {
+    assertLocalRepositoryFiles(event.sender.id);
+  }
   const context = getMarkdownDocumentContext(event.sender.id);
   let selfWrite = null;
   try {
@@ -1704,6 +1720,12 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) 
 
   try {
     const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
+    if (isRemoteRepositoryPath(repositoryPath)) {
+      return {
+        reason: 'Walkthroughs are not available for remote repositories yet.',
+        status: 'unavailable',
+      };
+    }
     const state = await readRepositoryStateWithConfig(
       repositoryPath,
       source || launchOptions?.source,
@@ -1890,6 +1912,12 @@ ipcMain.handle('codiff:getFeatureFlags', async (event) => {
 
 ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
+  if (isRemoteRepositoryPath(repositoryPath)) {
+    return {
+      reason: 'The review assistant is not available for remote repositories yet.',
+      status: 'unavailable',
+    };
+  }
   const launchOptions = windowLaunchOptions.get(event.sender.id);
   const state = await readRepositoryStateWithConfig(
     repositoryPath,
@@ -2016,6 +2044,10 @@ ipcMain.handle('codiff:findDefinitions', (event, request) =>
 
 ipcMain.handle('codiff:openFile', async (event, filePath, lineNumber) => {
   const repositoryRoot = getWindowRepositoryRoot(event.sender.id);
+  // Remote files only exist on the remote host.
+  if (isRemoteRepositoryPath(repositoryRoot)) {
+    return;
+  }
   const repositoryFilePath = validateRepositoryPath(filePath);
   const absolutePath = resolve(repositoryRoot, repositoryFilePath);
 
@@ -2031,6 +2063,10 @@ ipcMain.handle('codiff:openFile', async (event, filePath, lineNumber) => {
 
 ipcMain.handle('codiff:showInFolder', (event, filePath) => {
   const repositoryRoot = getWindowRepositoryRoot(event.sender.id);
+  // Remote files only exist on the remote host.
+  if (isRemoteRepositoryPath(repositoryRoot)) {
+    return;
+  }
   const repositoryFilePath = validateRepositoryPath(filePath);
   const absolutePath = resolve(repositoryRoot, repositoryFilePath);
 

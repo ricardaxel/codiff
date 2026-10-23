@@ -1,8 +1,8 @@
 // @ts-check
 
-const { execFileSync } = require('node:child_process');
 const { realpathSync } = require('node:fs');
 const { dirname, resolve } = require('node:path');
+const { execGitSync, isRemoteRepositoryPath } = require('./remote-repository.cjs');
 const { parseReviewUrl } = require('./review-source.cjs');
 
 /**
@@ -23,13 +23,23 @@ const getRealPath = (path) => {
 
 /** @param {string} repositoryPath */
 const resolveRepositoryRoot = (repositoryPath) => {
+  if (isRemoteRepositoryPath(repositoryPath)) {
+    try {
+      return String(
+        execGitSync(repositoryPath, ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }),
+      ).trim();
+    } catch {
+      return repositoryPath;
+    }
+  }
+
   const resolvedPath = resolve(repositoryPath);
 
   try {
     return getRealPath(
-      execFileSync('git', ['-C', resolvedPath, 'rev-parse', '--show-toplevel'], {
-        encoding: 'utf8',
-      }).trim(),
+      String(
+        execGitSync(resolvedPath, ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }),
+      ).trim(),
     );
   } catch {
     return getRealPath(resolvedPath);
@@ -39,9 +49,11 @@ const resolveRepositoryRoot = (repositoryPath) => {
 /** @param {string} repositoryRoot @param {string} ref */
 const resolveCommitRef = (repositoryRoot, ref) => {
   try {
-    return execFileSync('git', ['-C', repositoryRoot, 'rev-parse', '--verify', `${ref}^{commit}`], {
-      encoding: 'utf8',
-    })
+    return String(
+      execGitSync(repositoryRoot, ['rev-parse', '--verify', `${ref}^{commit}`], {
+        encoding: 'utf8',
+      }),
+    )
       .trim()
       .toLowerCase();
   } catch {
@@ -53,11 +65,9 @@ const resolveCommitRef = (repositoryRoot, ref) => {
 const hasWorkingTreeChanges = (repositoryRoot) => {
   try {
     return Boolean(
-      execFileSync(
-        'git',
-        ['-C', repositoryRoot, 'status', '--porcelain=v1', '-z', '--untracked-files=normal'],
-        { encoding: 'utf8' },
-      ),
+      execGitSync(repositoryRoot, ['status', '--porcelain=v1', '-z', '--untracked-files=normal'], {
+        encoding: 'utf8',
+      }),
     );
   } catch {
     return false;
@@ -67,9 +77,9 @@ const hasWorkingTreeChanges = (repositoryRoot) => {
 /** @param {string} repositoryRoot @param {string} baseRef @param {string} headRef */
 const resolveMergeBase = (repositoryRoot, baseRef, headRef) => {
   try {
-    return execFileSync('git', ['-C', repositoryRoot, 'merge-base', baseRef, headRef], {
-      encoding: 'utf8',
-    })
+    return String(
+      execGitSync(repositoryRoot, ['merge-base', baseRef, headRef], { encoding: 'utf8' }),
+    )
       .trim()
       .toLowerCase();
   } catch {

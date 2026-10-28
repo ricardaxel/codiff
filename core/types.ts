@@ -725,6 +725,31 @@ export type ReviewAssistantResult =
       status: 'unavailable';
     };
 
+export type ReviewHandoffComment = {
+  anchor?: 'file';
+  body: string;
+  context: string;
+  filePath: string;
+  id: string;
+  lineNumber?: number;
+  location: string;
+  side?: 'additions' | 'deletions';
+  startLineNumber?: number;
+  startSide?: 'additions' | 'deletions';
+};
+
+export type ReviewHandoffRequest = {
+  comments: ReadonlyArray<ReviewHandoffComment>;
+  source?: ReviewSource;
+};
+
+export type ReviewHandoffResolution = {
+  agent?: 'claude' | 'codex' | 'opencode' | 'pi';
+  id: string;
+  reply: string;
+  status: 'applied' | 'declined';
+};
+
 export type GitIdentity = {
   email: string;
   gravatarUrl?: string;

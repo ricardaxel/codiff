@@ -240,6 +240,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   onPlanCloseRequested: vi.fn(() => () => {}),
   onRefreshRequest: vi.fn(() => () => {}),
   onRepositoryChanged: vi.fn(() => () => {}),
+  onReviewCommentsResolved: vi.fn(() => () => {}),
   onUpdateStatusChanged: vi.fn(() => () => {}),
   onWalkthroughCommitOutput: vi.fn(() => () => {}),
   onWalkthroughProgress: vi.fn(() => () => {}),
@@ -248,6 +249,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   openFile: vi.fn(async () => {}),
   openReleasePage: vi.fn(async () => {}),
   openRepositoryFolder: vi.fn(async () => {}),
+  publishReviewComments: vi.fn(async () => {}),
   resetCodeFontSize: vi.fn(async () => {}),
   resolvePullRequestUrl: vi.fn(async () => 'https://github.com/owner/repo/pull/1'),
   saveMarkdownDocument: vi.fn(async (request) => ({

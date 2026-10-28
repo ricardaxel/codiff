@@ -201,3 +201,38 @@ test('app review comments submit and clear pending review drafts', async () => {
   expect(getState().reviewComments).toEqual([]);
   expect(getState().pullRequestReviewSubmitting).toBeNull();
 });
+
+test('app review comments show agent resolutions and hand edited comments off again', async () => {
+  await using view = await renderAppReviewComments(workingTreeState);
+  const { getState, onCommentFileChange } = view;
+  const otherComment = { ...comment, id: 'comment-2' };
+
+  await act(async () => {
+    getState().setReviewComments([comment, otherComment]);
+  });
+  await act(async () => {
+    getState().resolveHandoffComments([
+      { id: comment.id, reply: 'Done.', status: 'applied' },
+      { id: otherComment.id, reply: '', status: 'declined' },
+      { id: 'unknown', reply: '', status: 'applied' },
+    ]);
+  });
+  expect(getState().reviewComments).toEqual([
+    {
+      ...comment,
+      agentHandoff: { status: 'applied' },
+      codexReply: { body: 'Done.', status: 'ready' },
+    },
+    {
+      ...otherComment,
+      agentHandoff: { status: 'declined' },
+      codexReply: { body: 'Not applied.', status: 'ready' },
+    },
+  ]);
+  expect(onCommentFileChange).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    getState().updateComment(comment.id, 'Use 75 instead');
+  });
+  expect(getState().reviewComments[0]).toEqual({ ...comment, body: 'Use 75 instead' });
+});

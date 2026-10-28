@@ -1,6 +1,7 @@
 import { expect, test } from 'vite-plus/test';
 import type { ReviewComment } from '../lib/app-types.ts';
 import {
+  buildReviewHandoffComments,
   findReusableReviewCommentDraft,
   getPendingPullRequestReviewComments,
   getRefreshedReviewComments,
@@ -380,4 +381,42 @@ test('getRefreshedReviewComments replaces read-only comments with the refreshed 
 
   expect(comments.map((comment) => comment.id)).toEqual(['github:1', 'github:2', 'local:1']);
   expect(comments.find((comment) => comment.id === 'github:1')?.body).toBe('Outdated comment.');
+});
+
+test('builds the review comments an agent can pick up', () => {
+  const state = createPullRequestState();
+  expect(
+    buildReviewHandoffComments(
+      state.files,
+      [
+        createReviewComment({ body: '  Rename this.  ', id: 'local-1', startLineNumber: 3 }),
+        createReviewComment({ anchor: 'file', body: 'Split this file.', id: 'local-2' }),
+        createReviewComment({ id: 'remote', isReadOnly: true }),
+        createReviewComment({ body: ' ', id: 'empty' }),
+        createReviewComment({ agentHandoff: { status: 'applied' }, id: 'handled' }),
+      ],
+      false,
+    ),
+  ).toEqual([
+    {
+      body: 'Rename this.',
+      context: 'No patch context available.',
+      filePath: 'src/a.ts',
+      id: 'local-1',
+      lineNumber: 5,
+      location: 'New lines 3-5',
+      side: 'additions',
+      startLineNumber: 3,
+    },
+    {
+      anchor: 'file',
+      body: 'Split this file.',
+      context: 'No patch context available.',
+      filePath: 'src/a.ts',
+      id: 'local-2',
+      lineNumber: 5,
+      location: 'File',
+      side: 'additions',
+    },
+  ]);
 });

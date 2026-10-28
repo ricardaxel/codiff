@@ -52,6 +52,7 @@ import opencodeIconUrl from '../../assets/opencode.svg';
 import piIconUrl from '../../assets/pi.svg';
 import { getShortcutLabel, matchesShortcut } from '../../config/keymap.ts';
 import type { CodiffDiffStyle, CodiffKeymap } from '../../config/types.ts';
+import { getAgentLabel } from '../../lib/app-constants.ts';
 import type {
   CodeViewInstance,
   CodeViewItemMetadata,
@@ -1905,10 +1906,17 @@ function ReviewCommentEditor({
       </div>
       {comment.codexReply ? (
         <div className="review-comment codex">
-          <AgentAvatar agentId={agentId} />
+          <AgentAvatar agentId={comment.agentHandoff?.agent ?? agentId} />
           <div className="review-comment-body codex">
             <div className="review-comment-header codex">
-              <strong>{agentLabel}</strong>
+              <strong>
+                {comment.agentHandoff?.agent
+                  ? getAgentLabel(comment.agentHandoff.agent)
+                  : agentLabel}
+              </strong>
+              {comment.agentHandoff ? (
+                <span>{comment.agentHandoff.status === 'applied' ? 'Applied' : 'Not applied'}</span>
+              ) : null}
             </div>
             <div
               className={`review-comment-codex-reply${

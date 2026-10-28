@@ -24,6 +24,8 @@ import type {
   RepositoryState,
   ReviewAssistantRequest,
   ReviewAssistantResult,
+  ReviewHandoffRequest,
+  ReviewHandoffResolution,
   ReviewSource,
   SaveMarkdownDocumentRequest,
   SaveMarkdownDocumentResult,
@@ -101,6 +103,9 @@ declare global {
       onPlanCloseRequested: (callback: () => void) => () => void;
       onRefreshRequest: (callback: () => void) => () => void;
       onRepositoryChanged: (callback: (change: { root: string }) => void) => () => void;
+      onReviewCommentsResolved: (
+        callback: (resolutions: ReadonlyArray<ReviewHandoffResolution>) => void,
+      ) => () => void;
       onUpdateStatusChanged: (callback: (status: CodiffUpdateStatus) => void) => () => void;
       onWalkthroughCommitOutput: (callback: (chunk: string) => void) => () => void;
       onWalkthroughProgress: (callback: (progress: WalkthroughProgressEvent) => void) => () => void;
@@ -109,6 +114,7 @@ declare global {
       openFile: (path: string, lineNumber?: number) => Promise<void>;
       openReleasePage: () => Promise<void>;
       openRepositoryFolder: () => Promise<void>;
+      publishReviewComments: (request: ReviewHandoffRequest) => Promise<void>;
       resetCodeFontSize: () => Promise<void>;
       resolvePullRequestUrl: (value: string) => Promise<string>;
       saveMarkdownDocument: (

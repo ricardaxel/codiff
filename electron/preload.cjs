@@ -35,6 +35,7 @@ if (document.documentElement) {
 const codiff = {
   applyUpdate: () => ipcRenderer.invoke('codiff:applyUpdate'),
   askReviewAssistant: (request) => ipcRenderer.invoke('codiff:askReviewAssistant', request),
+  publishReviewComments: (request) => ipcRenderer.invoke('codiff:publishReviewComments', request),
   dismissUpdate: () => ipcRenderer.invoke('codiff:dismissUpdate'),
   createWalkthroughCommit: (request) =>
     ipcRenderer.invoke('codiff:createWalkthroughCommit', request),
@@ -128,6 +129,12 @@ const codiff = {
     const listener = () => callback();
     ipcRenderer.on('codiff:planCloseRequested', listener);
     return () => ipcRenderer.removeListener('codiff:planCloseRequested', listener);
+  },
+  onReviewCommentsResolved: (callback) => {
+    /** @param {Electron.IpcRendererEvent} _event @param {ReadonlyArray<import('../core/types.ts').ReviewHandoffResolution>} resolutions */
+    const listener = (_event, resolutions) => callback(resolutions);
+    ipcRenderer.on('codiff:reviewCommentsResolved', listener);
+    return () => ipcRenderer.removeListener('codiff:reviewCommentsResolved', listener);
   },
   onWalkthroughCommitOutput: (callback) => {
     /** @param {Electron.IpcRendererEvent} _event @param {string} chunk */

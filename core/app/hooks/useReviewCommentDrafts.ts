@@ -29,6 +29,11 @@ const updateCommentBody = (
       return comment;
     }
     changed = true;
+    // Editing a handled comment hands it to the agent again.
+    if (comment.agentHandoff) {
+      const { agentHandoff: _agentHandoff, codexReply: _codexReply, ...rest } = comment;
+      return { ...rest, body };
+    }
     return { ...comment, body };
   });
   return changed ? next : comments;

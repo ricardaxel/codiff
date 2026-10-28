@@ -10,6 +10,7 @@ import type {
   PullRequestReviewStatus,
   RepositoryState,
   ReviewAssistantRequest,
+  ReviewHandoffResolution,
 } from '../../types.ts';
 import { useReviewCommentDrafts } from './useReviewCommentDrafts.ts';
 
@@ -131,6 +132,38 @@ export function useAppReviewComments({
         });
     },
     [reviewCommentsRef, stateRef, updateCodexReply],
+  );
+
+  const resolveHandoffComments = useCallback(
+    (resolutions: ReadonlyArray<ReviewHandoffResolution>) => {
+      const resolutionById = new Map(resolutions.map((resolution) => [resolution.id, resolution]));
+      setReviewComments((current) =>
+        current.map((comment) => {
+          const resolution = resolutionById.get(comment.id);
+          if (!resolution || comment.isReadOnly) {
+            return comment;
+          }
+          return {
+            ...comment,
+            agentHandoff: {
+              ...(resolution.agent ? { agent: resolution.agent } : {}),
+              status: resolution.status,
+            },
+            codexReply: {
+              body:
+                resolution.reply || (resolution.status === 'applied' ? 'Applied.' : 'Not applied.'),
+              status: 'ready',
+            },
+          };
+        }),
+      );
+      for (const comment of reviewCommentsRef.current) {
+        if (resolutionById.has(comment.id)) {
+          onCommentFileChange(comment.filePath);
+        }
+      }
+    },
+    [onCommentFileChange, reviewCommentsRef],
   );
 
   const submitPullRequestComment = useCallback(
@@ -255,6 +288,7 @@ export function useAppReviewComments({
     askCodex,
     hasPendingReviewComments,
     pullRequestReviewSubmitting,
+    resolveHandoffComments,
     reviewComments,
     setReviewComments,
     submitPullRequestComment,

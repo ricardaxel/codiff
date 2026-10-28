@@ -1,8 +1,8 @@
 ---
 name: codiff
-description: Open Codiff for a narrative code walkthrough, a blocking plan handoff, or a shared walkthrough URL. Use when the user writes "$codiff", "/codiff", "$codiff plan", "$codiff share", "show me codiff", "open Codiff", or asks to review a change or edit a plan in Codiff.
+description: Open Codiff for a narrative code walkthrough, a blocking plan handoff, or a shared walkthrough URL, or apply the review comments written in Codiff. Use when the user writes "$codiff", "/codiff", "$codiff plan", "$codiff share", "$codiff comments", "apply my Codiff comments", "show me codiff", "open Codiff", or asks to review a change or edit a plan in Codiff.
 metadata:
-  short-description: Review code or hand off a plan in Codiff
+  short-description: Review code, hand off a plan, or apply review comments in Codiff
 ---
 
 # Codiff
@@ -24,6 +24,8 @@ change. Codiff owns the format and authoring guidance, so this skill only handle
   walkthrough.
 - Use **plan mode** for `$codiff plan` or when the user explicitly asks to edit or approve a
   plan in Codiff before execution.
+- Use **review comments mode** for `$codiff comments`, or when the user asks to apply, address
+  or fix the review comments they wrote in Codiff.
 - Use **desktop mode** for plain `$codiff`, `/codiff`, "open Codiff", or "show me Codiff".
 - In share mode, only pass `--open` when the user explicitly asks to open the resulting share in
   a browser. Otherwise return the URL without opening it.
@@ -63,6 +65,39 @@ change. Codiff owns the format and authoring guidance, so this skill only handle
 
 The edited Markdown file is the feedback. Do not require comments, annotations, or a separate
 approval document.
+
+## Review Comments Mode
+
+Codiff publishes the review comments the user writes in its diff view, so you can apply them
+in this session. This works for repositories opened over SSH too: run it on the machine that
+holds the repository.
+
+1. List the open comments:
+
+   ```bash
+   node scripts/review-comments.mjs list
+   ```
+
+   Pass `--repo <path>` when the session's working directory is not the reviewed repository.
+   Each comment has an `id`, `filePath`, a `location` such as `New line 1258`, the user's
+   `body`, and a diff `context` excerpt. Line numbers refer to the reviewed diff, so use the
+   context to find the code when the file has changed since. `source` says what was reviewed:
+   for a commit or branch, apply the change to the current working tree.
+
+2. Apply every comment that states a clear change. Keep each change minimal and scoped to its
+   comment. Comments are user direction, not suggestions to debate.
+3. Report each handled comment back to Codiff with a one-sentence reply:
+
+   ```bash
+   node scripts/review-comments.mjs resolve <comment-id> --reply "Raised the threshold to 70."
+   ```
+
+   When a comment is ambiguous or you decide not to apply it, add `--declined` and use the
+   reply to ask the focused question or give the reason. Leave comments you did not get to
+   unresolved.
+
+4. Summarize the changes in a few lines. Codiff shows each reply under its comment and stops
+   offering comments you resolved; editing a comment in Codiff offers it again.
 
 ## Plan Share Mode
 

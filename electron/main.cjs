@@ -15,6 +15,7 @@ const {
   powerMonitor,
   screen,
   shell,
+  webContents,
 } = require('electron');
 const squirrelStartup = require('electron-squirrel-startup');
 const {
@@ -74,6 +75,7 @@ const {
   getWindowIdentityForRepositoryState,
 } = require('./window-identity.cjs');
 const { createPendingCommentsClipboardController } = require('./pending-comments.cjs');
+const { createReviewHandoffController } = require('./review-handoff.cjs');
 const {
   getCommandLineLaunchOptions,
   getCommandLineRepositoryPath,
@@ -170,6 +172,15 @@ const completedPlanWindows = new Set();
 /** @type {Set<import('electron').BrowserWindow>} */
 const openWindows = new Set();
 const pendingCommentsClipboardController = createPendingCommentsClipboardController({ clipboard });
+const reviewHandoffController = createReviewHandoffController({
+  onError: (error) => console.error('Codiff could not hand off review comments:', error),
+  onResolved: (webContentsId, resolutions) => {
+    const contents = webContents.fromId(webContentsId);
+    if (contents && !contents.isDestroyed()) {
+      contents.send('codiff:reviewCommentsResolved', resolutions);
+    }
+  },
+});
 /** @type {CodiffConfig} */
 let config = createDefaultConfig();
 /** @type {ReadonlyArray<import('./codex-models.cjs').CodexModel> | undefined} */
@@ -1238,6 +1249,7 @@ const createWindow = (
     windowInitialRepositoryStates.delete(webContentsId);
     windowTitleRepositoryStates.delete(webContentsId);
     walkthroughProgressGenerations.delete(webContentsId);
+    void reviewHandoffController.dispose(webContentsId);
     windowRepositories.delete(webContentsId);
     windowLaunchOptions.delete(webContentsId);
   });
@@ -2090,6 +2102,17 @@ ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {
     return { reason: AI_DISABLED_REASON, status: 'unavailable' };
   }
   return readReviewAssistantReply(state, request, agent, getAgentOptions(agent));
+});
+
+ipcMain.handle('codiff:publishReviewComments', async (event, request) => {
+  const launchOptions = windowLaunchOptions.get(event.sender.id);
+  if (launchOptions?.planFile) {
+    return;
+  }
+  const root = getWindowRepositoryRoot(event.sender.id);
+  if (root) {
+    await reviewHandoffController.publish(event.sender.id, root, request);
+  }
 });
 
 ipcMain.handle('codiff:createWalkthroughCommit', async (event, request) => {

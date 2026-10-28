@@ -120,6 +120,9 @@ Codiff keeps one SSH connection to each listed host and picks up the requests `c
 computer wakes up. A host can only open its own repositories, and `codiff -r` reports when Codiff
 is not connected instead of leaving the request for later.
 
+Review comments reach agents on the remote host too; see
+[Applying review comments with your agent](#applying-review-comments-with-your-agent).
+
 Show all available options:
 
 ```bash
@@ -262,7 +265,8 @@ application menu:
 - `pi` — the Pi CLI, using its configured default model.
 - `none` — turns off every AI feature. Codiff hides walkthroughs, the review assistant and the
   agent skill installer, never launches an agent CLI, and `-w` or `--share` of a walkthrough
-  reports that AI is off. Plans can still be shared. `--agent none` does the same for a single
+  reports that AI is off. Plans can still be shared, and review comments still reach the agent
+  you run yourself through the skill. `--agent none` does the same for a single
   launch, and `--agent <backend>` turns AI back on for one launch.
 
 ```jsonc
@@ -350,6 +354,35 @@ current session and therefore uses that session's active model.
 narrative walkthrough JSON to a temporary file, and opens Codiff on it with `--walkthrough-file`
 plus the current session id. Because the guidance lives in Codiff, the installed skill stays a thin
 shim while the walkthrough sees the original conversation context without a lossy summary handoff.
+
+### Applying review comments with your agent
+
+Review comments you write in Codiff can be applied by the agent session you already work in,
+which knows why the code looks the way it does. While a window has comments, Codiff keeps them in
+`.git/codiff/review-comments.json` of the reviewed repository (the per-worktree Git directory for
+worktrees). For a repository opened with `--remote`, Codiff writes this file on the remote host
+over its SSH connection, so an agent running there can read it.
+
+With the skill installed, ask the agent to apply them:
+
+```text
+$codiff comments
+```
+
+The skill lists the comments with their location and diff context, applies the changes, and
+reports each handled comment back. Codiff shows the agent's reply under the comment, marked
+`Applied` or `Not applied`, and stops offering it; editing the comment offers it again. Codiff
+removes the file when you close the window or delete every comment. This works even when
+`settings.agentBackend` is `none`, because Codiff never launches an agent for it.
+
+For a remote repository, the agent on the remote host needs the `codiff` skill as well. Copy the
+installed skill there, for example for Claude Code:
+
+```bash
+scp -r ~/.claude/skills/codiff devbox:.claude/skills/
+```
+
+The comment commands only need Node.js and Git on that machine, not Codiff.
 
 ## Development
 

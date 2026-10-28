@@ -94,6 +94,11 @@ export type DiffLineCount = {
 };
 
 export type ReviewComment = {
+  // Set once the agent reports this comment handled through the review handoff.
+  agentHandoff?: {
+    agent?: 'claude' | 'codex' | 'opencode' | 'pi';
+    status: 'applied' | 'declined';
+  };
   anchor?: 'file' | 'line';
   author?: PullRequestExistingReviewComment['author'];
   body: string;

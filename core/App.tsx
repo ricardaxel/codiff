@@ -91,6 +91,7 @@ import {
 import { resolveReviewCommandTarget } from './lib/review-command-target.ts';
 import {
   buildReviewCommentsMarkdown,
+  buildReviewHandoffComments,
   getRefreshedReviewComments,
   getReviewCommentsFromState,
   getVisibleReviewComments,
@@ -134,6 +135,8 @@ import type {
 
 const emptyReviewComments: ReadonlyArray<ReviewComment> = [];
 const emptyWalkthroughNotes = new Map<string, WalkthroughNote>();
+const REVIEW_HANDOFF_DEBOUNCE_MS = 400;
+const REVIEW_HANDOFF_DRAFT_INTERVAL_MS = 1000;
 const disableCodeViewWorkerPool = process.env.NODE_ENV === 'test';
 const PlanEditorView = lazy(async () => ({
   default: (await import('./app/components/PlanEditorView.tsx')).PlanEditorView,
@@ -289,6 +292,8 @@ export default function App({
     [toggleReviewViewed],
   );
   const {
+    activeReviewCommentDraftRef,
+    activeReviewCommentDraftState,
     askCodex,
     createComment,
     deleteComment,
@@ -297,6 +302,7 @@ export default function App({
     hasPendingReviewComments,
     pullRequestReviewSubmitting,
     resetCommentFocus,
+    resolveHandoffComments,
     reviewComments,
     reviewCommentsRef,
     setReviewComments,
@@ -1610,6 +1616,61 @@ export default function App({
   const activeAgentBackend = launchOptions.agentBackend ?? codiffConfig.settings.agentBackend;
   // `none` turns off every AI feature, so their entry points are hidden.
   const activeAgentId = activeAgentBackend === 'none' ? null : activeAgentBackend;
+  const reviewHandoffKeyRef = useRef('');
+
+  // Keep the open comments where the `codiff` skill can pull them, so an agent
+  // can apply them and report back.
+  useEffect(() => {
+    if (!state || launchOptions.planFile) {
+      return;
+    }
+    const publish = () => {
+      // The comment being typed only reaches `reviewComments` on blur, so read
+      // its text from the draft ref.
+      const draft = activeReviewCommentDraftRef.current;
+      const comments = buildReviewHandoffComments(
+        state.files,
+        draft
+          ? reviewComments.map((comment) =>
+              comment.id === draft.id ? { ...comment, body: draft.body } : comment,
+            )
+          : reviewComments,
+        preferences.showWhitespace,
+      );
+      const key = JSON.stringify(comments);
+      if (
+        key === reviewHandoffKeyRef.current ||
+        (!reviewHandoffKeyRef.current && !comments.length)
+      ) {
+        return;
+      }
+      reviewHandoffKeyRef.current = key;
+      void window.codiff.publishReviewComments({ comments, source: state.source }).catch(() => {});
+    };
+    const timer = setTimeout(publish, REVIEW_HANDOFF_DEBOUNCE_MS);
+    // Typing does not re-render, so check the draft while one is open.
+    const interval = activeReviewCommentDraftState
+      ? setInterval(publish, REVIEW_HANDOFF_DRAFT_INTERVAL_MS)
+      : null;
+    return () => {
+      clearTimeout(timer);
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [
+    activeReviewCommentDraftRef,
+    activeReviewCommentDraftState,
+    launchOptions.planFile,
+    preferences.showWhitespace,
+    reviewComments,
+    state,
+  ]);
+
+  useEffect(
+    () => window.codiff.onReviewCommentsResolved(resolveHandoffComments),
+    [resolveHandoffComments],
+  );
   const commandBarCommands = useAppCommands({
     changeSidebarMode,
     focusFileFilter,

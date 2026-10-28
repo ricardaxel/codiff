@@ -4,6 +4,7 @@ import type {
   PullRequestExistingReviewComment,
   PullRequestReviewComment,
   RepositoryState,
+  ReviewHandoffComment,
 } from '../types.ts';
 import type { CodeViewInstance, ReviewComment } from './app-types.ts';
 import { parseSectionDiffWithOptions } from './diff.ts';
@@ -261,7 +262,9 @@ export const getReviewCommentsDigest = (comments: ReadonlyArray<ReviewComment>) 
       (comment) =>
         `${comment.id}:${comment.sectionId}:${comment.side}:${comment.lineNumber}:${
           comment.startLineNumber ?? ''
-        }:${comment.startSide ?? ''}:${comment.anchor ?? ''}:${getCommentTextDigest(
+        }:${comment.startSide ?? ''}:${comment.anchor ?? ''}:${
+          comment.agentHandoff?.status ?? ''
+        }:${getCommentTextDigest(
           comment.body,
         )}:${comment.codexReply?.status ?? ''}:${getCommentTextDigest(
           comment.codexReply?.body,
@@ -427,6 +430,38 @@ export const buildReviewCommentsMarkdown = (
   const resolvedPrefix =
     prefix == null ? '# Address these Review Comments\n\n' : prefix ? `${prefix}\n\n` : '';
   return markdown ? `${resolvedPrefix}${markdown}` : '';
+};
+
+// Comments the agent can pick up: written locally, not empty, and not yet handled.
+export const buildReviewHandoffComments = (
+  files: ReadonlyArray<ChangedFile>,
+  comments: ReadonlyArray<ReviewComment>,
+  showWhitespace: boolean,
+): ReadonlyArray<ReviewHandoffComment> => {
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
+  return comments.flatMap((comment) => {
+    const body = comment.body.trim();
+    if (comment.isReadOnly || comment.agentHandoff || !body) {
+      return [];
+    }
+    const file = filesByPath.get(comment.filePath);
+    const section = file?.sections.find((candidate) => candidate.id === comment.sectionId);
+    return [
+      {
+        body,
+        context:
+          file && section
+            ? getReviewCommentPatchContext(file, section, comment, showWhitespace)
+            : 'No patch context available.',
+        filePath: comment.filePath,
+        id: comment.id,
+        ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
+        location: getReviewCommentLineLabel(comment),
+        ...(comment.side ? { side: comment.side } : {}),
+        ...getReviewCommentRangeProps(comment),
+      },
+    ];
+  });
 };
 
 export const getReviewCommentsFromState = (state: RepositoryState): ReadonlyArray<ReviewComment> =>

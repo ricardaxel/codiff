@@ -14,6 +14,10 @@ const { parseReviewUrl } = require('./review-source.cjs');
 
 /** @param {string} path */
 const getRealPath = (path) => {
+  // `resolve` would turn `ssh://host/path` into a local path under the cwd.
+  if (isRemoteRepositoryPath(path)) {
+    return path;
+  }
   try {
     return realpathSync(path);
   } catch {

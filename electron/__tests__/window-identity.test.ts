@@ -158,6 +158,13 @@ test(
   },
 );
 
+test('window identities keep remote repository roots', () => {
+  const root = 'ssh://devbox/home/me/projects/app';
+  expect(
+    getWindowIdentityForRepositoryState({ root, source: { type: 'working-tree' } }),
+  ).toMatchObject({ repositoryRoot: root });
+});
+
 test('implicit walkthrough identities use HEAD only when the working tree is clean', async () => {
   await using directory = await createTemporaryDirectory('codiff-window-identity-');
   await initRepository(directory.path);

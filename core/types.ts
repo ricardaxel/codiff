@@ -95,6 +95,8 @@ export type PullRequestCodeQualityFinding = {
   lineNumber: number;
   severity: 'blocker' | 'critical' | 'info' | 'major' | 'minor' | 'unknown';
   status: 'existing' | 'new' | 'resolved';
+  /** Heading shown instead of "Code Quality", e.g. for an assisted-review agent note. */
+  title?: string;
   url?: string;
 };
 
@@ -150,6 +152,11 @@ export type ReviewSource =
       type: 'branch-working-tree';
     }
   | {
+      /**
+       * Set when the range is a live assisted-review comparison (`base_commit` against a snapshot of
+       * the working tree), whose viewed marks and comments belong to the review bridge.
+       */
+      assistedReview?: true;
       /** Base ref (left side). For symmetric ranges the diff starts at its merge-base with head. */
       base: string;
       /** Head ref (right side). */
@@ -242,7 +249,67 @@ export type RepositoryHistory = {
   root: string;
 };
 
+/** What the review bridge's `status` reports, as far as this front end uses it. */
+export type AssistedReviewStatus = {
+  annotations: ReadonlyArray<{
+    category: 'decision' | 'needs_verification' | 'your_judgment' | 'known_gap';
+    file: string;
+    id: string;
+    line: number;
+    line_end: number;
+    side: 'new' | 'old';
+    text: string;
+  }>;
+  base_commit: string;
+  branch: string;
+  briefing: string;
+  comments: Readonly<Record<string, ReadonlyArray<AssistedReviewComment>>>;
+  questions: Readonly<Record<string, 'acknowledged' | 'answered' | 'queued'>>;
+  review_id: string;
+  /** Marks keyed `"<old blob> <new blob> <path>"` (as review.nvim writes them) with epoch seconds. */
+  reviewed: Readonly<Record<string, number>>;
+  stale: boolean;
+  stops: ReadonlyArray<{
+    file: string;
+    id: string;
+    line: number;
+    line_end: number;
+    side: 'new' | 'old';
+    title: string;
+  }>;
+};
+
+export type AssistedReviewComment = {
+  branch?: string;
+  created_at?: number;
+  file: string;
+  id: string;
+  line: number;
+  line_end?: number;
+  side: 'new' | 'old';
+  text: string;
+  type: 'issue' | 'note' | 'praise' | 'suggestion';
+};
+
+export type AssistedReviewUpdate = { error: string } | { status: AssistedReviewStatus };
+
+export type AssistedReviewQuestion = {
+  annotation_id?: string;
+  file: string;
+  head: string;
+  line: number;
+  line_end: number;
+  question: string;
+  question_id: string;
+  side: 'new' | 'old';
+};
+
 export type RepositoryState = {
+  /**
+   * Present for an assisted-review comparison: the bridge's status when the state was read, and the
+   * review.nvim-compatible mark key of each file.
+   */
+  assistedReview?: { markKeys: Readonly<Record<string, string>>; status: AssistedReviewStatus };
   branch: string | null;
   codeQualityFindings?: ReadonlyArray<PullRequestCodeQualityFinding>;
   commitMetadata?: CommitMetadata;
@@ -450,6 +517,8 @@ export type WalkthroughContext = {
 export type CodiffLaunchOptions = {
   agentBackend?: CodiffAgentBackend;
   applyUpdate?: boolean;
+  /** Show a live assisted review; without `connectionFile` it is discovered for the repository. */
+  assistedReview?: { connectionFile?: string };
   claudeSessionId?: string;
   codexSessionId?: string;
   opencodeSessionId?: string;

@@ -207,6 +207,7 @@ const run = async () => {
 
   const {
     agentBackend,
+    assistedReview,
     branchRef,
     claudeSessionId,
     codexSessionId,
@@ -354,6 +355,7 @@ const run = async () => {
   const childEnv = {
     ...process.env,
     CODIFF_AGENT_BACKEND: agentBackend ?? '',
+    CODIFF_ASSISTED_REVIEW: assistedReview ?? '',
     CODIFF_BRANCH_REF: branchRef ?? '',
     CODIFF_CLAUDE_SESSION_ID: claudeSessionId ?? '',
     CODIFF_COMMIT_REF: commitRef ?? '',

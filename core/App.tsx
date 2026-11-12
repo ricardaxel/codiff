@@ -40,6 +40,7 @@ import { useAppCommands } from './app/hooks/useAppCommands.ts';
 import { useAppKeyboardShortcuts } from './app/hooks/useAppKeyboardShortcuts.ts';
 import { useAppReviewComments } from './app/hooks/useAppReviewComments.ts';
 import { useAppWalkthrough } from './app/hooks/useAppWalkthrough.ts';
+import { useAssistedReview } from './app/hooks/useAssistedReview.ts';
 import { createCodeEditingStore, useUnsavedCodeEditsGuard } from './app/hooks/useCodeEditing.ts';
 import { useCodeViewHighlighter } from './app/hooks/useCodeViewHighlighter.ts';
 import { useDiffSearch } from './app/hooks/useDiffSearch.ts';
@@ -121,6 +122,7 @@ import { readViewedForState, writeViewed } from './lib/viewed.ts';
 import type {
   ChangedFile,
   AgentSkillStatus,
+  AssistedReviewStatus,
   CodiffLaunchOptions,
   CodiffMarkdownDocument,
   CodiffPreferences,
@@ -259,9 +261,13 @@ export default function App({
   const stateGenerationRef = useRef(0);
   const markdownRefreshQueueRef = useRef<Promise<void>>(Promise.resolve());
   const viewedRef = useRef<Record<string, string>>({});
+  const assistedReviewStatusRef = useRef<AssistedReviewStatus | null>(null);
+  const saveAssistedReviewViewedRef = useRef<(viewed: Record<string, string>) => void>(() => {});
   const persistViewed = useCallback((nextViewed: Record<string, string>) => {
     const currentState = stateRef.current;
-    if (currentState && usesViewedFileState(currentState.source)) {
+    if (currentState?.assistedReview) {
+      saveAssistedReviewViewedRef.current(nextViewed);
+    } else if (currentState && usesViewedFileState(currentState.source)) {
       writeViewed(currentState.root, nextViewed);
     }
   }, []);
@@ -330,6 +336,20 @@ export default function App({
     onCommentFileChange: bumpItemVersion,
     stateRef,
   });
+  const assistedReview = useAssistedReview({
+    bumpItemVersion,
+    reviewComments,
+    reviewCommentsRef,
+    setReviewComments,
+    setViewed,
+    state,
+    stateRef,
+    statusRef: assistedReviewStatusRef,
+    viewedRef,
+  });
+  useEffect(() => {
+    saveAssistedReviewViewedRef.current = assistedReview.saveViewed;
+  }, [assistedReview.saveViewed]);
   const collapseSidebar = useCallback(() => {
     setSidebarCollapsed(true);
   }, []);
@@ -1927,9 +1947,9 @@ export default function App({
     activeSearchMatch: activeDiffSearchMatch,
     // The agent avatar is only shown next to the Ask action, which is hidden while AI is off.
     agentId: activeAgentId ?? 'codex',
-    agentLabel,
+    agentLabel: assistedReview.active ? 'Review agent' : agentLabel,
     codeEditingStore,
-    codeQualityFindings: state.codeQualityFindings,
+    codeQualityFindings: assistedReview.findings ?? state.codeQualityFindings,
     collapsed,
     comments: visibleReviewComments,
     commitMetadata,
@@ -1946,7 +1966,8 @@ export default function App({
     itemVersionByKey,
     keymap: codiffConfig.keymap,
     loadingSectionIds,
-    onAskCodex: activeAgentId ? askCodex : undefined,
+    // An assisted review's Ask goes to the bridge's agent, even with codiff's own AI off.
+    onAskCodex: assistedReview.active ? assistedReview.ask : activeAgentId ? askCodex : undefined,
     onCommentDraftChange: updateActiveReviewCommentDraft,
     onCreateComment: createComment,
     onDeleteComment: deleteComment,
@@ -2046,6 +2067,27 @@ export default function App({
       }
     >
       <div aria-hidden className="window-drag-region" />
+      {assistedReview.notice ? (
+        // Fixed, so it does not take a cell of the shell's grid. System colors follow the theme.
+        <div
+          role="alert"
+          style={{
+            background: 'Canvas',
+            border: '1px solid currentColor',
+            borderRadius: 6,
+            color: 'CanvasText',
+            left: '50%',
+            maxWidth: 'min(640px, 90vw)',
+            padding: '8px 12px',
+            position: 'fixed',
+            top: 8,
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+          }}
+        >
+          {assistedReview.notice}
+        </div>
+      ) : null}
       <ReviewTopBar
         actions={
           <CopyCommentsButton

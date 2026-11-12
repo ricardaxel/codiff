@@ -21,3 +21,7 @@ out/
 source_strings.json
 tsconfig.tsbuildinfo
 vite.config.ts.timestamp-*
+
+# nix build output
+/result
+/result-*

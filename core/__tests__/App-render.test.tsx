@@ -121,6 +121,13 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
     reason: 'Unavailable in tests.',
     status: 'unavailable' as const,
   })),
+  assistedReview: {
+    ask: vi.fn(async () => ({ delivery: 'queued', question_id: 'q' })),
+    getStatus: vi.fn(async () => null),
+    onUpdate: vi.fn(() => () => {}),
+    saveComments: vi.fn(async () => ({})),
+    saveReviewed: vi.fn(async () => ({})),
+  },
   completePlan: vi.fn(async () => {}),
   createWalkthroughCommit: vi.fn(async () => ({
     hash: '0000000000000000000000000000000000000000',

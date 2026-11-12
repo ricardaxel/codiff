@@ -16,6 +16,13 @@ export const flagDefinitions = [
     type: 'string',
   },
   {
+    argument: '[connection.json]',
+    description:
+      'Show the live assisted review for this repository, or the one in a bridge connection file.',
+    name: 'assisted-review',
+    type: 'string',
+  },
+  {
     argument: '<ref>',
     // With the source given as a flag, the positional argument can only be the
     // repository path.
@@ -390,6 +397,13 @@ export const parseArguments = (args) => {
   const walkthroughFilePath =
     typeof values['walkthrough-file'] === 'string' ? values['walkthrough-file'] : null;
   const remoteTarget = typeof values.remote === 'string' ? values.remote : null;
+  // A bare flag parses as `true` and means "discover the review for this repository" ('1').
+  const assistedReview =
+    typeof values['assisted-review'] === 'string'
+      ? resolve(values['assisted-review'])
+      : values['assisted-review'] === true
+        ? '1'
+        : null;
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
@@ -492,6 +506,7 @@ export const parseArguments = (args) => {
 
   return {
     ...(agentBackend ? { agentBackend } : {}),
+    ...(assistedReview ? { assistedReview } : {}),
     ...(claudeSessionId ? { claudeSessionId } : {}),
     ...(codexSessionId ? { codexSessionId } : {}),
     ...(opencodeSessionId ? { opencodeSessionId } : {}),

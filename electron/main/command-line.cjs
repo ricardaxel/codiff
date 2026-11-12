@@ -118,6 +118,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       'apply-update': {
         type: 'boolean',
       },
+      'assisted-review': {
+        type: 'string',
+      },
       commit: {
         type: 'string',
       },
@@ -269,6 +272,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   const envClaudeSessionId = useEnvironment ? process.env.CODIFF_CLAUDE_SESSION_ID || '' : '';
   const envOpenCodeSessionId = useEnvironment ? process.env.CODIFF_OPENCODE_SESSION_ID || '' : '';
   const envPiSessionId = useEnvironment ? process.env.CODIFF_PI_SESSION_ID || '' : '';
+  const envAssistedReview = useEnvironment ? process.env.CODIFF_ASSISTED_REVIEW || '' : '';
   const envPlanFilePath = useEnvironment ? process.env.CODIFF_PLAN_FILE || '' : '';
   const envPlanResultFilePath = useEnvironment ? process.env.CODIFF_PLAN_RESULT_FILE || '' : '';
   const envAgentBackend = useEnvironment ? process.env.CODIFF_AGENT_BACKEND || '' : '';
@@ -295,6 +299,20 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     (typeof values['pi-session'] === 'string' ? values['pi-session'] : '') ||
     envPiSessionId ||
     undefined;
+  // A bare `--assisted-review` (parsed as `true`) or `CODIFF_ASSISTED_REVIEW=1` discovers the live
+  // review for the repository; otherwise the value is the bridge's connection.json.
+  const assistedReviewFlag = values['assisted-review'];
+  const assistedReviewTarget =
+    assistedReviewFlag === undefined
+      ? envAssistedReview
+      : typeof assistedReviewFlag === 'string'
+        ? assistedReviewFlag
+        : '1';
+  const assistedReview = assistedReviewTarget
+    ? assistedReviewTarget === '1'
+      ? {}
+      : { connectionFile: resolve(assistedReviewTarget) }
+    : undefined;
   const planFilePath = requestedPlanFilePath || envPlanFilePath || undefined;
   const planResultFilePath =
     (typeof values['plan-result-file'] === 'string' ? values['plan-result-file'] : '') ||
@@ -344,6 +362,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   return {
     launchOptions: {
       ...(values['apply-update'] === true ? { applyUpdate: true } : {}),
+      ...(assistedReview ? { assistedReview } : {}),
       ...(agentBackend ? { agentBackend } : {}),
       ...(claudeSessionId ? { claudeSessionId } : {}),
       ...(codexSessionId ? { codexSessionId } : {}),

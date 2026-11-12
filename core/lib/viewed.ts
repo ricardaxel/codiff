@@ -1,4 +1,5 @@
 import type { RepositoryState } from '../types.ts';
+import { viewedFromReviewed } from './assisted-review.ts';
 import { getWalkthroughReviewKeyPrefix } from './review-identity.ts';
 import { usesViewedFileState } from './source.ts';
 
@@ -20,6 +21,10 @@ export const readViewedForState = (
   state: RepositoryState,
   previous: Readonly<Record<string, string>> = {},
 ): Record<string, string> => {
+  // The bridge owns every viewed mark of an assisted review.
+  if (state.assistedReview) {
+    return viewedFromReviewed(state, state.assistedReview.status.reviewed);
+  }
   if (usesViewedFileState(state.source)) {
     return readViewed(state.root);
   }

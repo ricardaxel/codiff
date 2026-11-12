@@ -18,6 +18,7 @@ const {
   webContents,
 } = require('electron');
 const squirrelStartup = require('electron-squirrel-startup');
+const { openSession: openAssistedReview } = require('./assisted-review/session.cjs');
 const {
   listRepositoryHistory,
   readDiffImageContent,
@@ -224,12 +225,57 @@ const refreshInstalledAgentFiles = () => {
 /** The configured agent, or `null` when AI features are turned off. */
 const getActiveAgent = () => getEnabledAgent(config.settings.agentBackend);
 
+/** @type {Awaited<ReturnType<typeof openAssistedReview>> | null} */
+let assistedReviewSession = null;
+
+/** @param {import('../core/types.ts').CodiffLaunchOptions} launchOptions */
+const startAssistedReview = async (launchOptions) => {
+  if (!launchOptions.assistedReview || assistedReviewSession) {
+    return;
+  }
+  assistedReviewSession = await openAssistedReview({
+    ...launchOptions.assistedReview,
+    launchPath: getLaunchPath(),
+  });
+  assistedReviewSession.watch((update) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('codiff:assistedReview:update', update);
+      }
+    }
+  });
+};
+
+const requireAssistedReview = () => {
+  if (!assistedReviewSession) {
+    throw new Error('Codiff was not launched with --assisted-review.');
+  }
+  return assistedReviewSession;
+};
+
 /** @param {string} repositoryPath @param {ReviewSource} [source] */
-const readRepositoryStateWithConfig = (repositoryPath, source) =>
-  readRepositoryState(repositoryPath, source, {
+const readRepositoryStateWithConfig = async (repositoryPath, source) => {
+  const session = assistedReviewSession;
+  // The review's own comparison is re-snapshotted on every read, so a refresh shows the current
+  // worktree. Any other explicit source (history, a commit) keeps its normal meaning.
+  if (session && (!source || (source.type === 'range' && source.assistedReview))) {
+    const reviewSource = await session.readSource();
+    const state = await readRepositoryState(session.root, reviewSource, {
+      showWhitespace: config.settings.showWhitespace,
+    });
+    return {
+      ...state,
+      assistedReview: {
+        markKeys: await session.markKeys(state.files, reviewSource.head),
+        status: session.getStatus(),
+      },
+    };
+  }
+  return readRepositoryState(repositoryPath, source, {
     showUntracked: config.settings.showUntracked,
     showWhitespace: config.settings.showWhitespace,
   });
+};
 
 /** @param {string} repositoryPath @param {CodiffLaunchOptions} launchOptions */
 const readInitialRepositoryStateWithConfig = (repositoryPath, launchOptions) =>
@@ -1633,9 +1679,21 @@ if (squirrelStartup || !lock) {
     setInterval(runScheduledUpdateCheck, UPDATE_CHECK_TIMER_INTERVAL_MS);
 
     const launchOptions = getLaunchOptions();
-    void walkthroughLaunchController.open(
-      getInitialRepositoryPath(getLaunchPath(), launchOptions, config.settings.lastRepositoryPath),
-      launchOptions,
+    startAssistedReview(launchOptions).then(
+      () =>
+        walkthroughLaunchController.open(
+          getInitialRepositoryPath(
+            getLaunchPath(),
+            launchOptions,
+            config.settings.lastRepositoryPath,
+          ),
+          launchOptions,
+        ),
+      (error) => {
+        // Nothing else can show this: the app launches detached from the terminal.
+        dialog.showErrorBox('Codiff', error instanceof Error ? error.message : String(error));
+        app.quit();
+      },
     );
     if (launchOptions.applyUpdate) {
       void updater?.applyLatest().catch(() => {});
@@ -1766,6 +1824,17 @@ ipcMain.handle('codiff:getRepositoryState', async (event, source) => {
   void resetRepositoryWatcher(event.sender.id, state.root);
   return state;
 });
+
+ipcMain.handle('codiff:assistedReview:getStatus', () => assistedReviewSession?.getStatus() ?? null);
+ipcMain.handle('codiff:assistedReview:ask', (_event, request) =>
+  requireAssistedReview().ask(request),
+);
+ipcMain.handle('codiff:assistedReview:saveComments', (_event, comments) =>
+  requireAssistedReview().saveComments(comments),
+);
+ipcMain.handle('codiff:assistedReview:saveReviewed', (_event, reviewed) =>
+  requireAssistedReview().saveReviewed(reviewed),
+);
 
 ipcMain.handle('codiff:resolvePullRequestUrl', (event, value) => {
   const input = typeof value === 'string' ? value.trim() : '';

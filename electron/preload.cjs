@@ -36,6 +36,18 @@ const codiff = {
   applyUpdate: () => ipcRenderer.invoke('codiff:applyUpdate'),
   askReviewAssistant: (request) => ipcRenderer.invoke('codiff:askReviewAssistant', request),
   publishReviewComments: (request) => ipcRenderer.invoke('codiff:publishReviewComments', request),
+  assistedReview: {
+    ask: (request) => ipcRenderer.invoke('codiff:assistedReview:ask', request),
+    getStatus: () => ipcRenderer.invoke('codiff:assistedReview:getStatus'),
+    onUpdate: (callback) => {
+      /** @param {Electron.IpcRendererEvent} _event @param {import('../core/types.ts').AssistedReviewUpdate} update */
+      const listener = (_event, update) => callback(update);
+      ipcRenderer.on('codiff:assistedReview:update', listener);
+      return () => ipcRenderer.removeListener('codiff:assistedReview:update', listener);
+    },
+    saveComments: (comments) => ipcRenderer.invoke('codiff:assistedReview:saveComments', comments),
+    saveReviewed: (reviewed) => ipcRenderer.invoke('codiff:assistedReview:saveReviewed', reviewed),
+  },
   dismissUpdate: () => ipcRenderer.invoke('codiff:dismissUpdate'),
   createWalkthroughCommit: (request) =>
     ipcRenderer.invoke('codiff:createWalkthroughCommit', request),

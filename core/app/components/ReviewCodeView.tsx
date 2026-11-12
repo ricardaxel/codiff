@@ -2287,10 +2287,12 @@ function CodeQualityAnnotation({
       >
         <div className="review-comment-header code-quality-finding-header">
           <WarningOctagon aria-hidden size={16} weight="fill" />
-          <strong>Code Quality</strong>
-          <span className="code-quality-finding-severity">
-            {codeQualitySeverityLabel[finding.severity]}
-          </span>
+          <strong>{finding.title ?? 'Code Quality'}</strong>
+          {finding.title ? null : (
+            <span className="code-quality-finding-severity">
+              {codeQualitySeverityLabel[finding.severity]}
+            </span>
+          )}
           {finding.status === 'new' ? <span className="code-quality-finding-new">New</span> : null}
         </div>
         <div className="code-quality-finding-content">

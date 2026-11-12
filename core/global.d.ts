@@ -2,6 +2,10 @@ import type { NativeKeyboardLayout } from './config/keyboard-layout.ts';
 import type { CodiffConfig, CodiffSyntaxHighlighter } from './config/types.ts';
 import type {
   AgentSkillStatus,
+  AssistedReviewComment,
+  AssistedReviewQuestion,
+  AssistedReviewStatus,
+  AssistedReviewUpdate,
   CodiffFeatureFlags,
   CodiffLaunchOptions,
   CodiffMarkdownDocument,
@@ -53,6 +57,18 @@ declare global {
     codiff: {
       applyUpdate: () => Promise<CodiffUpdateStatus>;
       askReviewAssistant: (request: ReviewAssistantRequest) => Promise<ReviewAssistantResult>;
+      /** Live assisted-review bridge; every call rejects unless launched with `--assisted-review`. */
+      assistedReview: {
+        ask: (
+          request: AssistedReviewQuestion,
+        ) => Promise<{ delivery: string; question_id: string }>;
+        getStatus: () => Promise<AssistedReviewStatus | null>;
+        onUpdate: (listener: (update: AssistedReviewUpdate) => void) => () => void;
+        saveComments: (
+          comments: Readonly<Record<string, ReadonlyArray<AssistedReviewComment>>>,
+        ) => Promise<unknown>;
+        saveReviewed: (reviewed: Readonly<Record<string, number>>) => Promise<unknown>;
+      };
       completePlan: (review: PlanReview, status: PlanHandoffStatus) => Promise<void>;
       createWalkthroughCommit: (
         request: WalkthroughCommitRequest,

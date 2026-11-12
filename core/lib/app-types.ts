@@ -102,6 +102,12 @@ export type ReviewComment = {
   anchor?: 'file' | 'line';
   author?: PullRequestExistingReviewComment['author'];
   body: string;
+  /** Fields the assisted-review bridge keeps for a comment, preserved across a round trip. */
+  bridge?: {
+    branch?: string;
+    createdAt?: number;
+    type: 'issue' | 'note' | 'praise' | 'suggestion';
+  };
   canDelete?: boolean;
   canEdit?: boolean;
   canReplyThread?: boolean;

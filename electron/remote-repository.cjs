@@ -401,6 +401,7 @@ module.exports = {
   execGitSync,
   formatRemoteRepositoryPath,
   getGitInvocation,
+  getRemoteShellCommand,
   isRemoteRepositoryPath,
   mapGitOutput,
   parseRemoteRepositoryPath,

@@ -1,11 +1,13 @@
 import { BugIcon as Bug } from '@phosphor-icons/react/Bug';
+import { FlagCheckeredIcon as FlagCheckered } from '@phosphor-icons/react/FlagCheckered';
 import { FlaskIcon as Flask } from '@phosphor-icons/react/Flask';
 import { GearIcon as Gear } from '@phosphor-icons/react/Gear';
 import { PathIcon as Path } from '@phosphor-icons/react/Path';
 import { ReadCvLogoIcon as Doc } from '@phosphor-icons/react/ReadCvLogo';
+import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/ShareNetwork';
 import { WrenchIcon as Wrench } from '@phosphor-icons/react/Wrench';
 import type { ComponentType } from 'react';
-import { renderInlineMarkdown } from '../../../lib/markdown.tsx';
+import { renderBlockMarkdown } from '../../../lib/markdown.tsx';
 import { importanceLabel } from '../../../lib/narrative-walkthrough.ts';
 import type { WalkthroughIcon, WalkthroughStop } from '../../../types.ts';
 
@@ -45,7 +47,40 @@ export function WalkthroughLineCount({ added, deleted }: { added: number; delete
 export function Narration({ prose }: { prose: string }) {
   return (
     <div className="wt-narration">
-      <p className="wt-narration-prose">{renderInlineMarkdown(prose)}</p>
+      <div className="wt-narration-prose">{renderBlockMarkdown(prose)}</div>
     </div>
   );
 }
+
+/** An assisted review's end of round, offered where a walkthrough is otherwise shared. */
+export type EndReviewAction = { ended: boolean; label: string; onEnd: () => void; title: string };
+
+/** The walkthrough's closing action: end the assisted-review round, else share it, else none. */
+export const walkthroughFinishAction = ({
+  endReview,
+  onShareWalkthrough,
+  shareWalkthroughDisabled = false,
+}: {
+  endReview?: EndReviewAction;
+  onShareWalkthrough?: () => void;
+  shareWalkthroughDisabled?: boolean;
+}) =>
+  endReview
+    ? {
+        disabled: endReview.ended,
+        heading: 'Finish',
+        Icon: FlagCheckered,
+        label: endReview.label,
+        onClick: endReview.onEnd,
+        title: endReview.title,
+      }
+    : onShareWalkthrough
+      ? {
+          disabled: shareWalkthroughDisabled,
+          heading: 'Share',
+          Icon: ShareNetwork,
+          label: shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough',
+          onClick: onShareWalkthrough,
+          title: shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough',
+        }
+      : null;

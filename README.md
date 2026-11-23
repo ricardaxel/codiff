@@ -131,6 +131,24 @@ is not connected instead of leaving the request for later.
 Review comments reach agents on the remote host too; see
 [Applying review comments with your agent](#applying-review-comments-with-your-agent).
 
+An [assisted review](https://gitlab.allegrodvt.net/antoine.vaure/codiff) whose bridge runs on the
+remote host opens with the repository: `codiff -r` connects to that repository's live review there,
+and `codiff --assisted-review <connection_file>` on the remote host (the command the bridge
+suggests) opens one review. `codiff --assisted-review ssh://devbox/<connection_file>` does the same
+from this machine. Codiff reads the connection file over SSH, with the same ownership and
+permission checks as a local one, and forwards the bridge's Unix socket to a private local socket
+through its own `ssh -N -L` connection, closed with the review. The connection file's token only
+travels inside that connection. Reviews in the runtime directory that assisted review's Docker
+scripts share (`assisted-review-docker-<uid>`) are found too.
+
+Without a recent Node on this machine, build with Docker and start the app with Electron's own
+Node:
+
+```bash
+scripts/docker-pnpm.sh install && scripts/docker-pnpm.sh build
+bin/codiff-host
+```
+
 Show all available options:
 
 ```bash

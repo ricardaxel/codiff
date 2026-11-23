@@ -126,6 +126,24 @@ test('bridge comments round trip through Codiff comments, keeping unshown files'
   expect(sameComments(commentsToBridge(shown.slice(1), retained), bridgeComments)).toBe(false);
 });
 
+const sha = (digit: string) => digit.repeat(40);
+
+test('a commit-by-commit review shows only the current commit’s comments and tags new ones', () => {
+  const scoped = {
+    'a.txt': [
+      { ...bridgeComments['a.txt'][0], commit: sha('1') },
+      { ...bridgeComments['a.txt'][1], commit: sha('2') },
+    ],
+  };
+  const { retained, shown } = commentsFromBridge(state, scoped, sha('1'));
+
+  expect(shown.map((comment) => comment.id)).toEqual(['c1']);
+  expect(retained.map((comment) => comment.id)).toEqual(['c2']);
+  expect(commentsToBridge(shown, retained, sha('1'))).toEqual(scoped);
+  // A full-diff review hides comments made on a commit.
+  expect(commentsFromBridge(state, scoped).shown).toEqual([]);
+});
+
 test('drafts, file comments and remote comments are not sent, and ranges stay on one side', () => {
   const base = { body: 'text', filePath: 'a.txt', sectionId: 's' };
   const sent = commentsToBridge([

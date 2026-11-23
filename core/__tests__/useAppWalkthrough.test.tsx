@@ -51,6 +51,7 @@ function AppWalkthroughHarness({
   stateRef: Parameters<typeof useAppWalkthrough>[0]['stateRef'];
 }) {
   const controller = useAppWalkthrough({
+    assistedReviewStatus: null,
     preferencesRef,
     state,
     stateGenerationRef,

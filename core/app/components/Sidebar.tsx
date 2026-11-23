@@ -10,6 +10,7 @@ import { Button } from './Button.tsx';
 import { DiffSummaryFooter } from './DiffSummaryFooter.tsx';
 import { ReviewFileTree } from './FileTree.tsx';
 import { NarrativeSidebar } from './walkthrough/NarrativeSidebar.tsx';
+import type { EndReviewAction } from './walkthrough/parts.tsx';
 import type { NarrativeNavigation } from './walkthrough/useNarrativeNavigation.ts';
 import { WalkthroughProgress } from './walkthrough/WalkthroughProgress.tsx';
 
@@ -18,6 +19,7 @@ export function Sidebar({
   commitFiles,
   commitViewOpen,
   currentSource,
+  endReview,
   files,
   historyEntries,
   historyHasMore,
@@ -48,6 +50,7 @@ export function Sidebar({
   commitFiles: ReadonlyArray<ChangedFile>;
   commitViewOpen: boolean;
   currentSource: ReviewSource;
+  endReview?: EndReviewAction;
   files: ReadonlyArray<ChangedFile>;
   historyEntries: ReadonlyArray<HistoryEntry>;
   historyHasMore: boolean;
@@ -126,6 +129,7 @@ export function Sidebar({
         />
       ) : mode === 'walkthrough' && narrativeWalkthrough ? (
         <NarrativeSidebar
+          endReview={endReview}
           files={commitFiles}
           navigation={narrativeNavigation}
           onShareWalkthrough={onShareWalkthrough}

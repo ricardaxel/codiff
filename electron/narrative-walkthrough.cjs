@@ -17,6 +17,7 @@ const {
   IMPORTANCES,
   MAX_HUNKS_PER_WALKTHROUGH_GROUP,
   MAX_WALKTHROUGH_CHAPTERS,
+  MAX_ASSISTED_REVIEW_STOPS,
   MAX_WALKTHROUGH_STOPS,
   narrativeWalkthroughResponseSchema,
   narrativeWalkthroughSchema,
@@ -295,14 +296,14 @@ const normalizeHunkGroup = (item, fallbackId, index) => {
 
 const hunkGroupKey = (group) => (group.hunkIds || []).join('\n');
 
-const normalizeChapters = (input, index, coveredHunkIds) => {
+const normalizeChapters = (input, index, coveredHunkIds, maxStops = MAX_WALKTHROUGH_STOPS) => {
   const chapters = [];
   const chapterIds = new Set();
   const itemIds = new Set();
   let stopCount = 0;
 
   for (const chapter of Array.isArray(input?.chapters) ? input.chapters : []) {
-    if (chapters.length >= MAX_WALKTHROUGH_CHAPTERS || stopCount >= MAX_WALKTHROUGH_STOPS) {
+    if (chapters.length >= MAX_WALKTHROUGH_CHAPTERS || stopCount >= maxStops) {
       break;
     }
 
@@ -314,7 +315,7 @@ const normalizeChapters = (input, index, coveredHunkIds) => {
     const stops = [];
     const seenStopHunkGroups = new Set();
     for (const stop of Array.isArray(chapter?.stops) ? chapter.stops : []) {
-      if (stopCount >= MAX_WALKTHROUGH_STOPS) {
+      if (stopCount >= maxStops) {
         break;
       }
 
@@ -493,7 +494,14 @@ const normalizeNarrativeWalkthrough = (input, files, facts = {}, hunkIdByAlias =
 
   const index = indexFiles(files, hunkIdByAlias);
   const coveredHunkIds = new Set();
-  const { chapters, itemIds, stopCount } = normalizeChapters(input, index, coveredHunkIds);
+  const maxStops =
+    facts.agent === 'assisted-review' ? MAX_ASSISTED_REVIEW_STOPS : MAX_WALKTHROUGH_STOPS;
+  const { chapters, itemIds, stopCount } = normalizeChapters(
+    input,
+    index,
+    coveredHunkIds,
+    maxStops,
+  );
   if (chapters.length === 0 || stopCount === 0) {
     throw new Error('Narrative walkthrough has no chapters with resolvable stops.');
   }

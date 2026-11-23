@@ -2572,6 +2572,31 @@ test('file-level review comments render as measured file annotations', async () 
   });
 });
 
+test('agent annotations render their Markdown', async () => {
+  const file = createChangedFile('src/app.ts');
+  await using view = await renderReact(
+    <ReviewCodeViewHarness
+      codeQualityFindings={[
+        {
+          description: '**Why:** retries `once`.\n\n- Check the timeout\n- Check the log',
+          filePath: file.path,
+          fingerprint: 'agent-1',
+          lineNumber: 1,
+          severity: 'info',
+          status: 'new',
+          title: 'Agent · Decision',
+        },
+      ]}
+      files={[file]}
+    />,
+  );
+
+  const description = view.container.querySelector('.code-quality-finding-description');
+  expect(description?.querySelector('strong')?.textContent).toBe('Why:');
+  expect(description?.querySelector('code')?.textContent).toBe('once');
+  expect(description?.querySelectorAll('li')).toHaveLength(2);
+});
+
 test('code quality findings render as additions annotations', async () => {
   const file = createChangedFile('src/app.ts');
   const finding = {

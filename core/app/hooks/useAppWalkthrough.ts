@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { SidebarMode, WalkthroughError } from '../../lib/app-types.ts';
+import { assistedReviewViewKey } from '../../lib/assisted-review.ts';
 import { buildCommitModel, buildGenericCommitModel } from '../../lib/narrative-walkthrough.ts';
 import {
   createReviewCommandTarget,
@@ -7,6 +8,7 @@ import {
 } from '../../lib/review-command-target.ts';
 import { getSourceKey } from '../../lib/source.ts';
 import type {
+  AssistedReviewStatus,
   ChangedFile,
   CodiffPreferences,
   NarrativeWalkthrough,
@@ -25,6 +27,7 @@ import type { WalkthroughFileError } from '../components/WalkthroughFileError.ts
 type MainMode = 'commit' | 'review';
 
 type UseAppWalkthroughOptions = {
+  assistedReviewStatus: AssistedReviewStatus | null;
   preferencesRef: RefObject<CodiffPreferences>;
   state: RepositoryState | null;
   stateGenerationRef: RefObject<number>;
@@ -34,6 +37,7 @@ type UseAppWalkthroughOptions = {
 const emptyFiles: ReadonlyArray<ChangedFile> = [];
 
 export function useAppWalkthrough({
+  assistedReviewStatus,
   preferencesRef,
   state,
   stateGenerationRef,
@@ -63,7 +67,17 @@ export function useAppWalkthrough({
   const sidebarModeRef = useRef<SidebarMode>('tree');
   const walkthroughErrorRef = useRef<WalkthroughError | null>(null);
   const walkthroughRequestRef = useRef(0);
-  const navigationResetKey = state ? `${state.root}:${getSourceKey(state.source)}` : '';
+  // An assisted review's source key carries a fresh snapshot sha on every read, so key it on the
+  // review itself to keep the reading position across refreshes.
+  const navigationResetKey = state
+    ? `${state.root}:${
+        state.assistedReview
+          ? `assisted:${state.assistedReview.status.review_id}:${assistedReviewViewKey(
+              state.assistedReview.status,
+            )}`
+          : getSourceKey(state.source)
+      }`
+    : '';
   const narrativeNavigation = useNarrativeNavigation(
     narrativeWalkthrough,
     state?.files ?? emptyFiles,
@@ -211,6 +225,33 @@ export function useAppWalkthrough({
     },
     [loadNarrativeWalkthrough],
   );
+
+  // The bridge pushes new stops, briefing and annotations without any repository change. Reload
+  // in place (the old walkthrough stays until the new one arrives) so the sidebar does not flash.
+  const bridgeContent = assistedReviewStatus
+    ? JSON.stringify([
+        assistedReviewStatus.stops,
+        assistedReviewStatus.briefing,
+        assistedReviewStatus.annotations,
+        assistedReviewStatus.chapters,
+        assistedReviewStatus.support,
+      ])
+    : null;
+  const bridgeContentRef = useRef(bridgeContent);
+  useEffect(() => {
+    if (bridgeContentRef.current === bridgeContent) {
+      return;
+    }
+    bridgeContentRef.current = bridgeContent;
+    const currentState = stateRef.current;
+    if (
+      currentState?.assistedReview &&
+      currentState.files.length > 0 &&
+      (narrativeWalkthroughRef.current != null || sidebarModeRef.current === 'walkthrough')
+    ) {
+      loadNarrativeWalkthrough(currentState.source);
+    }
+  }, [bridgeContent, loadNarrativeWalkthrough, stateRef]);
 
   const changeSidebarMode = useCallback(
     (mode: SidebarMode) => {

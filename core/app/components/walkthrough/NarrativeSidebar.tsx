@@ -1,8 +1,7 @@
 import { CheckIcon as Check } from '@phosphor-icons/react/Check';
 import { GitBranchIcon as GitBranch } from '@phosphor-icons/react/GitBranch';
 import { PathIcon as Path } from '@phosphor-icons/react/Path';
-import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/ShareNetwork';
-import { renderInlineMarkdown } from '../../../lib/markdown.tsx';
+import { renderBlockMarkdown } from '../../../lib/markdown.tsx';
 import {
   buildCommitModel,
   formatWalkthroughFileLineRows,
@@ -13,7 +12,7 @@ import {
   type WalkthroughStopView,
 } from '../../../lib/narrative-walkthrough.ts';
 import type { ChangedFile, NarrativeWalkthrough } from '../../../types.ts';
-import { ChapterIcon } from './parts.tsx';
+import { ChapterIcon, type EndReviewAction, walkthroughFinishAction } from './parts.tsx';
 import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
 
 function TocFileRows({
@@ -149,6 +148,7 @@ function SupportingFilesStop({
 
 export function NarrativeSidebar({
   allowCommit = true,
+  endReview,
   files,
   navigation,
   onShareWalkthrough,
@@ -157,6 +157,8 @@ export function NarrativeSidebar({
   walkthrough,
 }: {
   allowCommit?: boolean;
+  /** An assisted review: ending the round replaces sharing. */
+  endReview?: EndReviewAction;
   files: ReadonlyArray<ChangedFile>;
   navigation: NarrativeNavigation;
   onShareWalkthrough?: () => void;
@@ -173,6 +175,11 @@ export function NarrativeSidebar({
     navigation.mode === 'stop' ? walkthroughView.sequence[navigation.index]?.id : null;
 
   const committable = allowCommit && isWalkthroughCommittable(walkthrough);
+  const finish = walkthroughFinishAction({
+    endReview,
+    onShareWalkthrough,
+    shareWalkthroughDisabled,
+  });
   const commitModel = committable ? buildCommitModel(walkthroughView, files) : null;
   const commitFiles = commitModel
     ? formatWalkthroughFileLineRows(
@@ -184,7 +191,7 @@ export function NarrativeSidebar({
     <div className="walkthrough-list">
       <div className="wt-focus">
         <span className="wt-focus-label">Review focus</span>
-        <p>{renderInlineMarkdown(walkthrough.focus)}</p>
+        <div className="wt-focus-body">{renderBlockMarkdown(walkthrough.focus)}</div>
       </div>
 
       <div className="wt-toc-scroll">
@@ -247,13 +254,13 @@ export function NarrativeSidebar({
               </span>
             </div>
           </div>
-        ) : onShareWalkthrough ? (
+        ) : finish ? (
           <div className="wt-toc-chapter">
             <div className="wt-toc-chapter-head">
               <span className="wt-toc-chapter-icon commit">
-                <ShareNetwork size={15} />
+                <finish.Icon size={15} />
               </span>
-              <span className="wt-toc-chapter-title">Share</span>
+              <span className="wt-toc-chapter-title">{finish.heading}</span>
             </div>
             <div className="wt-toc-stop wt-toc-stop-actions">
               <span className="wt-toc-rail wt-toc-rail-commit">
@@ -262,12 +269,13 @@ export function NarrativeSidebar({
               <span className="wt-toc-main wt-toc-main-actions">
                 <button
                   className="wt-toc-commit-action"
-                  disabled={shareWalkthroughDisabled}
-                  onClick={onShareWalkthrough}
+                  disabled={finish.disabled}
+                  onClick={finish.onClick}
+                  title={finish.title}
                   type="button"
                 >
                   <span className="wt-toc-title-row">
-                    <span className="wt-toc-title">Share walkthrough</span>
+                    <span className="wt-toc-title">{finish.label}</span>
                   </span>
                 </button>
               </span>

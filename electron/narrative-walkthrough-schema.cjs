@@ -2,7 +2,8 @@
 
 const IMPORTANCES = new Set(['critical', 'normal', 'context']);
 const ICONS = new Set(['bug', 'wrench', 'path', 'flask', 'beaker', 'doc', 'gear']);
-const AGENTS = new Set(['codex', 'claude', 'opencode', 'pi']);
+// `assisted-review`: a walkthrough published through the assisted-review bridge.
+const AGENTS = new Set(['codex', 'claude', 'opencode', 'pi', 'assisted-review']);
 const CHANGE_TYPES = new Set([
   'fix',
   'feature',
@@ -17,6 +18,8 @@ const CHANGE_TYPES = new Set([
 
 const MAX_WALKTHROUGH_CHAPTERS = 6;
 const MAX_WALKTHROUGH_STOPS = 14;
+// The assisted-review bridge's own cap; codiff's agents are held to MAX_WALKTHROUGH_STOPS.
+const MAX_ASSISTED_REVIEW_STOPS = 100;
 const MAX_HUNKS_PER_WALKTHROUGH_GROUP = 14;
 
 const hunkGroupProperties = {
@@ -214,6 +217,7 @@ module.exports = {
   ICONS,
   IMPORTANCES,
   MAX_WALKTHROUGH_CHAPTERS,
+  MAX_ASSISTED_REVIEW_STOPS,
   MAX_WALKTHROUGH_STOPS,
   MAX_HUNKS_PER_WALKTHROUGH_GROUP,
   narrativeWalkthroughResponseSchema,

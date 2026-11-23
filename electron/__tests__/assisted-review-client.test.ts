@@ -15,7 +15,7 @@ const { call } = require('../assisted-review/client.cjs') as {
 };
 const { discoverReviews, readConnection } = require('../assisted-review/sessions.cjs') as {
   discoverReviews: (
-    root: string,
+    root: string | null,
     options?: { runtimeDir?: string },
   ) => Promise<Array<{ file: string; state: { review_id: string } }>>;
   readConnection: (file: string) => {
@@ -160,4 +160,8 @@ test('discoverReviews keeps live, non-stale reviews of this root', async () => {
   const reviews = await discoverReviews('/repo', { runtimeDir: runtime });
 
   expect(reviews.map((review) => review.state.review_id)).toEqual(['live']);
+
+  const anywhere = await discoverReviews(null, { runtimeDir: runtime });
+
+  expect(anywhere.map((review) => review.state.review_id)).toEqual(['live', 'other']);
 });

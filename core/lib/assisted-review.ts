@@ -12,6 +12,45 @@ import type { ReviewComment } from './app-types.ts';
 type Marks = Readonly<Record<string, number>>;
 type BridgeComments = Readonly<Record<string, ReadonlyArray<AssistedReviewComment>>>;
 
+/**
+ * Which diff a status shows: its round and, in commits mode, its commit. A state read for another
+ * key is out of date, and its comments and marks belong to another view.
+ */
+export const assistedReviewViewKey = (status: AssistedReviewStatus | null | undefined) =>
+  status ? `${status.round ?? 1}:${status.current_commit ?? ''}` : null;
+
+/**
+ * The round's closing action. Commit by commit, it finishes the shown commit and moves everyone
+ * to the next one, until the last commit, which ends the review.
+ */
+export const endReviewLabel = (status: AssistedReviewStatus) => {
+  if (status.ended) {
+    return { label: 'Review ended', title: 'The agent is handling your comments' };
+  }
+  const commits = status.commits ?? [];
+  const index = commits.findIndex((commit) => commit.sha === status.current_commit);
+  if (status.mode === 'commits' && index >= 0 && index < commits.length - 1) {
+    return {
+      label: 'Finish commit',
+      title: "Hand this commit's comments to the agent and go to the next commit",
+    };
+  }
+  return {
+    label: 'End review',
+    title: 'End this review round and hand your comments to the agent',
+  };
+};
+
+/** What the window tells the user about the review: the agent's call first, then the round. */
+export const assistedReviewNotice = (status: AssistedReviewStatus) =>
+  status.attention
+    ? `Claude needs you in the conversation: ${status.attention.text}`
+    : status.ended
+      ? `Review round ${status.round ?? 1} ended: the agent is handling your comments.`
+      : status.stale
+        ? 'This review is stale: tracked files changed since the agent began it. Ask it to begin a new review.'
+        : null;
+
 /** The path inside a review.nvim mark key, `"<old blob> <new blob> <path>"`. */
 const markPath = (key: string) => key.match(/^\S+ \S+ (.*)$/)?.[1];
 
@@ -86,17 +125,22 @@ export const findingsFromAnnotations = (
 const diffSide = (side: 'new' | 'old') => (side === 'old' ? 'deletions' : 'additions');
 
 /**
- * Bridge comments as Codiff comments. Comments on files outside this diff cannot be shown, so they
- * are returned as `retained` and must go back into every save: a save replaces the whole set.
+ * Bridge comments as Codiff comments. Comments on files outside this diff, or made on another
+ * commit of a commit-by-commit review, cannot be shown, so they are returned as `retained` and
+ * must go back into every save: a save replaces the whole set.
  */
-export const commentsFromBridge = (state: RepositoryState, comments: BridgeComments) => {
+export const commentsFromBridge = (
+  state: RepositoryState,
+  comments: BridgeComments,
+  commit?: string | null,
+) => {
   const sectionByPath = new Map(state.files.map((file) => [file.path, file.sections[0]?.id]));
   const shown: Array<ReviewComment> = [];
   const retained: Array<AssistedReviewComment> = [];
   for (const entries of Object.values(comments)) {
     for (const comment of entries) {
       const sectionId = sectionByPath.get(comment.file);
-      if (!sectionId) {
+      if (!sectionId || (comment.commit ?? null) !== (commit ?? null)) {
         retained.push(comment);
         continue;
       }
@@ -132,6 +176,7 @@ const bridgeIdentifier = /^[A-Za-z0-9_-]{1,100}$/;
 export const commentsToBridge = (
   comments: ReadonlyArray<ReviewComment>,
   retained: ReadonlyArray<AssistedReviewComment> = [],
+  commit?: string | null,
 ): Record<string, Array<AssistedReviewComment>> => {
   const result: Record<string, Array<AssistedReviewComment>> = {};
   const add = (comment: AssistedReviewComment) => {
@@ -163,6 +208,7 @@ export const commentsToBridge = (
       type: comment.bridge?.type ?? 'note',
       ...(comment.bridge?.createdAt === undefined ? {} : { created_at: comment.bridge.createdAt }),
       ...(comment.bridge?.branch === undefined ? {} : { branch: comment.bridge.branch }),
+      ...(commit ? { commit } : {}),
     });
   }
   for (const comment of retained) {

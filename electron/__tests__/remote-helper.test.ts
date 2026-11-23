@@ -25,11 +25,14 @@ const { createRemoteHelperWatcher, installRemoteHelper, parseRemoteHelperRequest
       initialRetryDelayMs?: number;
       maxRetryDelayMs?: number;
       onOpen: (host: string, path: string) => void | Promise<void>;
+      onOpenReview?: (host: string, connectionFile: string) => void | Promise<void>;
       onStatusChange?: (host: string, status: RemoteHelperStatus) => void;
       silenceTimeoutMs?: number;
     }) => RemoteHelperWatcher;
     installRemoteHelper: (host: string) => Promise<void>;
-    parseRemoteHelperRequest: (line: string) => { path: string } | { error: string };
+    parseRemoteHelperRequest: (
+      line: string,
+    ) => { path: string } | { connectionFile: string } | { error: string };
   };
 const { readConfig } = require('../config.cjs') as {
   readConfig: () => { settings: { remoteHelperHosts: ReadonlyArray<string> } };
@@ -115,6 +118,44 @@ test('parses remote helper requests', () => {
     error: 'The repository path must be absolute.',
   });
   expect(parseRemoteHelperRequest('run rm -rf /')).toEqual({ error: 'Unsupported request.' });
+});
+
+test('codiff --assisted-review sends a review connection file through the watcher', async () => {
+  await using directory = await createTemporaryDirectory('codiff-remote-helper-');
+  const root = await realpath(directory.path);
+  const remote = await createFakeRemote(root);
+  using _environment = remote.environment;
+  const session = join(remote.remoteHome, 'run', 'session-1');
+  await mkdir(session, { recursive: true });
+  const connectionFile = join(session, 'connection.json');
+  await writeFile(connectionFile, '{}');
+
+  const reviews: Array<[string, string]> = [];
+  const watcher = createRemoteHelperWatcher({
+    onOpen: () => {
+      throw new Error('Expected a review request.');
+    },
+    onOpenReview: (host, file) => {
+      reviews.push([host, file]);
+    },
+  });
+  try {
+    watcher.update(['devbox']);
+    await waitFor(() => watcher.getStatus().devbox?.connected === true);
+
+    // Relative to the current directory, as the bridge's suggested command may be run.
+    expect(
+      await runHelper(['--assisted-review', 'connection.json'], remote.remoteHome, session),
+    ).toEqual({ code: 0, stderr: '', stdout: `Sent ${connectionFile} to Codiff.\n` });
+    await waitFor(() => reviews.length === 1);
+    expect(reviews).toEqual([['devbox', connectionFile]]);
+
+    const missing = await runHelper(['--assisted-review', 'nope.json'], remote.remoteHome, session);
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain('no connection file: nope.json');
+  } finally {
+    watcher.close();
+  }
 });
 
 test('codiff -r opens the repository through the watcher connection', async () => {

@@ -311,7 +311,8 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   const assistedReview = assistedReviewTarget
     ? assistedReviewTarget === '1'
       ? {}
-      : { connectionFile: resolve(assistedReviewTarget) }
+      : // A remote connection file (addressed like a `--remote` repository) stays as it is.
+        { connectionFile: resolveRepositoryPath(assistedReviewTarget) }
     : undefined;
   const planFilePath = requestedPlanFilePath || envPlanFilePath || undefined;
   const planResultFilePath =

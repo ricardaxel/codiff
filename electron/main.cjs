@@ -1,7 +1,7 @@
 // @ts-check
 
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');
-const { basename, dirname, join, relative, resolve } = require('node:path');
+const { basename, dirname, isAbsolute, join, relative, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const {
   app,
@@ -19,6 +19,7 @@ const {
 } = require('electron');
 const squirrelStartup = require('electron-squirrel-startup');
 const { openSession: openAssistedReview } = require('./assisted-review/session.cjs');
+const { buildAssistedWalkthrough } = require('./assisted-review/walkthrough.cjs');
 const {
   listRepositoryHistory,
   readDiffImageContent,
@@ -225,37 +226,76 @@ const refreshInstalledAgentFiles = () => {
 /** The configured agent, or `null` when AI features are turned off. */
 const getActiveAgent = () => getEnabledAgent(config.settings.agentBackend);
 
-/** @type {Awaited<ReturnType<typeof openAssistedReview>> | null} */
-let assistedReviewSession = null;
+/**
+ * One bridge session per reviewed repository, so several reviews can be open at once.
+ *
+ * @type {Map<string, {session: Awaited<ReturnType<typeof openAssistedReview>>; stop: () => void}>}
+ */
+const assistedReviews = new Map();
 
-/** @param {import('../core/types.ts').CodiffLaunchOptions} launchOptions */
-const startAssistedReview = async (launchOptions) => {
-  if (!launchOptions.assistedReview || assistedReviewSession) {
-    return;
+/** @param {string} repositoryPath */
+const findAssistedReview = (repositoryPath) => {
+  for (const { session } of assistedReviews.values()) {
+    const path = relative(session.root, repositoryPath);
+    if (!path.startsWith('..') && !isAbsolute(path)) {
+      return session;
+    }
   }
-  assistedReviewSession = await openAssistedReview({
-    ...launchOptions.assistedReview,
-    launchPath: getLaunchPath(),
-  });
-  assistedReviewSession.watch((update) => {
+  return null;
+};
+
+/** @param {number} webContentsId */
+const findWindowAssistedReview = (webContentsId) =>
+  findAssistedReview(windowRepositories.get(webContentsId) || getLaunchPath());
+
+/** @param {number} webContentsId */
+const requireAssistedReview = (webContentsId) => {
+  const session = findWindowAssistedReview(webContentsId);
+  if (!session) {
+    throw new Error('This window is not showing an assisted review.');
+  }
+  return session;
+};
+
+/**
+ * Connects to the live assisted review of `launchPath`'s repository, if any. `--assisted-review`
+ * is the explicit form: it may name another repository's review and failing is an error. Plain
+ * launches pick up a review of the current repository and otherwise stay a normal diff viewer.
+ *
+ * @param {import('../core/types.ts').CodiffLaunchOptions} launchOptions @param {string} launchPath
+ */
+const startAssistedReview = async (launchOptions, launchPath) => {
+  const explicit = launchOptions.assistedReview;
+  let session;
+  try {
+    session = await openAssistedReview({ ...explicit, anywhere: explicit != null, launchPath });
+  } catch (error) {
+    if (explicit) {
+      throw error;
+    }
+    // shortcut: a stale or ambiguous review is only logged, not surfaced; add a banner if it bites.
+    console.warn(error instanceof Error ? error.message : String(error));
+    return null;
+  }
+  assistedReviews.get(session.root)?.stop();
+  session.watch((update) => {
+    if (update.error) {
+      // The session is over; a remote review also drops its forwarded socket.
+      session.close();
+    }
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
+      if (!window.isDestroyed() && findWindowAssistedReview(window.webContents.id) === session) {
         window.webContents.send('codiff:assistedReview:update', update);
       }
     }
   });
-};
-
-const requireAssistedReview = () => {
-  if (!assistedReviewSession) {
-    throw new Error('Codiff was not launched with --assisted-review.');
-  }
-  return assistedReviewSession;
+  assistedReviews.set(session.root, { session, stop: () => session.close() });
+  return session;
 };
 
 /** @param {string} repositoryPath @param {ReviewSource} [source] */
 const readRepositoryStateWithConfig = async (repositoryPath, source) => {
-  const session = assistedReviewSession;
+  const session = findAssistedReview(repositoryPath);
   // The review's own comparison is re-snapshotted on every read, so a refresh shows the current
   // worktree. Any other explicit source (history, a commit) keeps its normal meaning.
   if (session && (!source || (source.type === 'range' && source.assistedReview))) {
@@ -265,6 +305,8 @@ const readRepositoryStateWithConfig = async (repositoryPath, source) => {
     });
     return {
       ...state,
+      // readRepositoryState drops the flag, but later reads and the walkthrough key off it.
+      source: { ...state.source, assistedReview: true },
       assistedReview: {
         markKeys: await session.markKeys(state.files, reviewSource.head),
         status: session.getStatus(),
@@ -684,12 +726,28 @@ const buildModelSubmenu = () => {
 
 // `codiff -r` on a machine listed in settings.remoteHelperHosts opens its
 // repository here. Codiff keeps an SSH connection to each of those machines.
+// `codiff -r` and `codiff --assisted-review` on a remote host. Either connects to a live assisted
+// review there (forwarding its bridge socket) before the window opens, like a local launch.
 const remoteHelperWatcher = createRemoteHelperWatcher({
   onOpen: async (host, path) => {
-    await openInLastUsedWindow(formatRemoteRepositoryPath({ destination: host, path }), {
-      repositoryPathProvided: true,
-      walkthrough: false,
-    });
+    await openLaunchWindow(
+      formatRemoteRepositoryPath({ destination: host, path }),
+      { repositoryPathProvided: true, walkthrough: false },
+      { fromRemoteHelper: true },
+    );
+  },
+  onOpenReview: async (host, connectionFile) => {
+    await openLaunchWindow(
+      formatRemoteRepositoryPath({ destination: host, path: '/' }),
+      {
+        assistedReview: {
+          connectionFile: formatRemoteRepositoryPath({ destination: host, path: connectionFile }),
+        },
+        repositoryPathProvided: true,
+        walkthrough: false,
+      },
+      { fromRemoteHelper: true },
+    );
   },
   onStatusChange: (host, status) => {
     if (!status.connected && status.lastError) {
@@ -1620,6 +1678,39 @@ const checkForUpdatesFromMenu = async () => {
   }
 };
 
+/**
+ * Opens the window for a launch, first connecting to its assisted review if there is one.
+ * A remote helper request opens in the last-used window and never quits the app on failure,
+ * which would also drop the connections that serve later requests.
+ *
+ * @param {string} launchPath @param {CodiffLaunchOptions} launchOptions
+ * @param {{fromRemoteHelper?: boolean}} [options]
+ */
+const openLaunchWindow = async (launchPath, launchOptions, { fromRemoteHelper = false } = {}) => {
+  let session = null;
+  try {
+    session = await startAssistedReview(launchOptions, launchPath);
+  } catch (error) {
+    // Nothing else can show this: the app launches detached from the terminal.
+    dialog.showErrorBox('Codiff', error instanceof Error ? error.message : String(error));
+    if (!fromRemoteHelper && BrowserWindow.getAllWindows().length === 0) {
+      app.quit();
+    }
+    return;
+  }
+  const openWindow = fromRemoteHelper
+    ? openInLastUsedWindow
+    : (/** @type {string} */ path, /** @type {CodiffLaunchOptions} */ options) =>
+        walkthroughLaunchController.open(path, options);
+  await openWindow(
+    // An explicit review may live in a different repository than where Codiff was launched from.
+    launchOptions.assistedReview && session
+      ? session.root
+      : getInitialRepositoryPath(launchPath, launchOptions, config.settings.lastRepositoryPath),
+    launchOptions,
+  );
+};
+
 const lock =
   !squirrelStartup &&
   app.requestSingleInstanceLock({
@@ -1639,10 +1730,7 @@ if (squirrelStartup || !lock) {
     const launchPath = resolveRepositoryPath(
       data.repositoryPath || getCommandLineRepositoryPath(commandLine) || workingDirectory,
     );
-    void walkthroughLaunchController.open(
-      getInitialRepositoryPath(launchPath, launchOptions, config.settings.lastRepositoryPath),
-      launchOptions,
-    );
+    void openLaunchWindow(launchPath, launchOptions);
     if (launchOptions.applyUpdate) {
       void updater?.applyLatest().catch(() => {});
     }
@@ -1679,22 +1767,7 @@ if (squirrelStartup || !lock) {
     setInterval(runScheduledUpdateCheck, UPDATE_CHECK_TIMER_INTERVAL_MS);
 
     const launchOptions = getLaunchOptions();
-    startAssistedReview(launchOptions).then(
-      () =>
-        walkthroughLaunchController.open(
-          getInitialRepositoryPath(
-            getLaunchPath(),
-            launchOptions,
-            config.settings.lastRepositoryPath,
-          ),
-          launchOptions,
-        ),
-      (error) => {
-        // Nothing else can show this: the app launches detached from the terminal.
-        dialog.showErrorBox('Codiff', error instanceof Error ? error.message : String(error));
-        app.quit();
-      },
-    );
+    void openLaunchWindow(getLaunchPath(), launchOptions);
     if (launchOptions.applyUpdate) {
       void updater?.applyLatest().catch(() => {});
     }
@@ -1825,15 +1898,24 @@ ipcMain.handle('codiff:getRepositoryState', async (event, source) => {
   return state;
 });
 
-ipcMain.handle('codiff:assistedReview:getStatus', () => assistedReviewSession?.getStatus() ?? null);
-ipcMain.handle('codiff:assistedReview:ask', (_event, request) =>
-  requireAssistedReview().ask(request),
+ipcMain.handle(
+  'codiff:assistedReview:getStatus',
+  (event) => findWindowAssistedReview(event.sender.id)?.getStatus() ?? null,
 );
-ipcMain.handle('codiff:assistedReview:saveComments', (_event, comments) =>
-  requireAssistedReview().saveComments(comments),
+ipcMain.handle('codiff:assistedReview:ask', (event, request) =>
+  requireAssistedReview(event.sender.id).ask(request),
 );
-ipcMain.handle('codiff:assistedReview:saveReviewed', (_event, reviewed) =>
-  requireAssistedReview().saveReviewed(reviewed),
+ipcMain.handle('codiff:assistedReview:saveComments', (event, comments) =>
+  requireAssistedReview(event.sender.id).saveComments(comments),
+);
+ipcMain.handle('codiff:assistedReview:setCommit', (event, index) =>
+  requireAssistedReview(event.sender.id).setCommit(index),
+);
+ipcMain.handle('codiff:assistedReview:endReview', (event) =>
+  requireAssistedReview(event.sender.id).endReview(),
+);
+ipcMain.handle('codiff:assistedReview:saveReviewed', (event, reviewed) =>
+  requireAssistedReview(event.sender.id).saveReviewed(reviewed),
 );
 
 ipcMain.handle('codiff:resolvePullRequestUrl', (event, value) => {
@@ -1990,6 +2072,28 @@ ipcMain.handle('codiff:installTerminalHelper', async (event) => {
 });
 
 ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) => {
+  // An assisted review's walkthrough is the review agent's own reading order, from the bridge.
+  const assistedReview = findWindowAssistedReview(event.sender.id);
+  if (assistedReview && source?.assistedReview) {
+    try {
+      // The exact comparison the renderer shows, so hunk ids line up with its diff.
+      const state = await readRepositoryState(assistedReview.root, source, {
+        showWhitespace: config.settings.showWhitespace,
+      });
+      const walkthrough = buildAssistedWalkthrough(assistedReview.getStatus(), state);
+      return walkthrough
+        ? { status: 'ready', walkthrough }
+        : {
+            reason: 'The review agent has not published a walkthrough yet.',
+            status: 'unavailable',
+          };
+    } catch (error) {
+      return {
+        reason: error instanceof Error ? error.message : String(error),
+        status: 'unavailable',
+      };
+    }
+  }
   const launchOptions = windowLaunchOptions.get(event.sender.id);
   const progressGeneration = (walkthroughProgressGenerations.get(event.sender.id) || 0) + 1;
   walkthroughProgressGenerations.set(event.sender.id, progressGeneration);

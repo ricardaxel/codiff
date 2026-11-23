@@ -15,6 +15,7 @@ import {
   writeReloadSelection,
 } from '../lib/reload-selection.ts';
 import type {
+  AssistedReviewUpdate,
   ChangedFile,
   CommitMetadata,
   NarrativeWalkthrough,
@@ -64,6 +65,23 @@ const repositoryState = {
   root: '/repo',
   source: { type: 'working-tree' },
 } satisfies RepositoryState;
+
+// An assisted review begun through the bridge, for the tests of that mode.
+const assistedReview = {
+  markKeys: {},
+  status: {
+    annotations: [],
+    base_commit: 'base',
+    branch: 'main',
+    briefing: 'Briefing.',
+    comments: {},
+    questions: {},
+    review_id: 'review-1',
+    reviewed: {},
+    stale: false,
+    stops: [],
+  },
+} satisfies NonNullable<RepositoryState['assistedReview']>;
 
 const createCommitMetadataFixture = (body: string): CommitMetadata => ({
   author: {
@@ -123,10 +141,12 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   })),
   assistedReview: {
     ask: vi.fn(async () => ({ delivery: 'queued', question_id: 'q' })),
+    endReview: vi.fn(async () => {}),
     getStatus: vi.fn(async () => null),
     onUpdate: vi.fn(() => () => {}),
     saveComments: vi.fn(async () => ({})),
     saveReviewed: vi.fn(async () => ({})),
+    setCommit: vi.fn(async () => {}),
   },
   completePlan: vi.fn(async () => {}),
   createWalkthroughCommit: vi.fn(async () => ({
@@ -3998,6 +4018,78 @@ test('walkthrough progress events replace the loading line without exposing agen
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+});
+
+test('a commit-by-commit review moves through commits and re-reads the diff when the bridge moves', async () => {
+  const commits = [
+    { parent: 'base', prepared: true, sha: 'a'.repeat(40), subject: 'First step' },
+    { parent: 'a'.repeat(40), prepared: false, sha: 'b'.repeat(40), subject: 'Second step' },
+  ];
+  const status = (current: number) => ({
+    ...assistedReview.status,
+    commits,
+    current_commit: commits[current].sha,
+    mode: 'commits' as const,
+  });
+  const changedFile = createChangedFile('src/app.ts', { kind: 'commit' });
+  let current = 0;
+  const getRepositoryState = vi.fn(async (): Promise<RepositoryState> => ({
+    ...repositoryState,
+    assistedReview: { markKeys: {}, status: status(current) },
+    files: [changedFile],
+  }));
+  let push: ((update: AssistedReviewUpdate) => void) | null = null;
+  const setCommit = vi.fn(async () => {});
+  const mock = createCodiffMock({
+    getLaunchOptions: vi.fn(async () => ({ repositoryPathProvided: true, walkthrough: false })),
+    getRepositoryState,
+  });
+  mock.assistedReview = {
+    ...mock.assistedReview,
+    onUpdate: vi.fn((listener: (update: AssistedReviewUpdate) => void) => {
+      push = listener;
+      return () => {};
+    }),
+    setCommit,
+  };
+  window.codiff = mock;
+
+  const container = document.createElement('div');
+  document.body.append(container);
+  let root: Root | null = null;
+  await using _resource = {
+    async [Symbol.asyncDispose]() {
+      if (root) {
+        await act(async () => root?.unmount());
+      }
+      container.remove();
+    },
+  };
+  await act(async () => {
+    root = createRoot(container);
+    root.render(<App />);
+  });
+  const select = () =>
+    container.querySelector('select[aria-label="Commit to review"]') as HTMLSelectElement | null;
+  await waitFor(() => expect(select()?.value).toBe('0'));
+  expect(select()?.textContent).toContain('2/2 Second step (agent preparing)');
+
+  await act(async () => {
+    (container.querySelector('button[aria-label="Next commit"]') as HTMLButtonElement).click();
+  });
+  expect(setCommit).toHaveBeenCalledWith(1);
+
+  // The bridge moved (from this window or from Neovim): the diff is read again for that commit.
+  const reads = getRepositoryState.mock.calls.length;
+  current = 1;
+  await act(async () => {
+    push?.({ status: status(1) });
+  });
+  await waitFor(() => expect(getRepositoryState.mock.calls.length).toBeGreaterThan(reads));
+  await waitFor(() => expect(select()?.value).toBe('1'));
+  expect(
+    (container.querySelector('button[aria-label="Next commit"]') as HTMLButtonElement).disabled,
+  ).toBe(true);
 });
 
 test('history filter matches commits by author name', async () => {

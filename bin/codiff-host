@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Start this checkout's build with Electron's bundled Node, for hosts whose own Node is too old
+# for bin/codiff.js (built with scripts/docker-pnpm.sh install && scripts/docker-pnpm.sh build).
+set -euo pipefail
+root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+electron="$root/node_modules/electron/dist/electron"
+if [[ ! -x "$electron" ]]; then
+  echo "codiff-host: no Electron in $root/node_modules; run scripts/docker-pnpm.sh install" >&2
+  exit 1
+fi
+ELECTRON_RUN_AS_NODE=1 exec "$electron" "$root/bin/codiff.js" "$@"

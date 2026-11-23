@@ -73,20 +73,29 @@ const terminate = (child) => {
 };
 
 /**
- * Parse one `open <absolute path>` request line.
+ * Parse one request line: `open <absolute repository path>`, or `review <absolute path>` for an
+ * assisted review's connection file on that host.
  *
  * @param {string} line
- * @returns {{path: string} | {error: string}}
+ * @returns {{path: string} | {connectionFile: string} | {error: string}}
  */
 const parseRemoteHelperRequest = (line) => {
-  if (!line.startsWith('open ')) {
+  const kind = line.startsWith('open ') ? 'open' : line.startsWith('review ') ? 'review' : null;
+  if (!kind) {
     return { error: 'Unsupported request.' };
   }
-  const path = line.slice('open '.length);
+  const path = line.slice(kind.length + 1);
   if (!path.startsWith('/') || path.includes('\0')) {
-    return { error: 'The repository path must be absolute.' };
+    return {
+      error:
+        kind === 'open'
+          ? 'The repository path must be absolute.'
+          : 'The connection file path must be absolute.',
+    };
   }
-  return { path: posix.normalize(path) };
+  return kind === 'open'
+    ? { path: posix.normalize(path) }
+    : { connectionFile: posix.normalize(path) };
 };
 
 /**
@@ -108,6 +117,7 @@ const parseRemoteHelperRequest = (line) => {
  *   initialRetryDelayMs?: number;
  *   maxRetryDelayMs?: number;
  *   onOpen: (host: string, path: string) => void | Promise<void>;
+ *   onOpenReview?: (host: string, connectionFile: string) => void | Promise<void>;
  *   onStatusChange?: (host: string, status: RemoteHelperStatus) => void;
  *   silenceTimeoutMs?: number;
  * }} options
@@ -116,6 +126,7 @@ const createRemoteHelperWatcher = ({
   initialRetryDelayMs = INITIAL_RETRY_DELAY_MS,
   maxRetryDelayMs = MAX_RETRY_DELAY_MS,
   onOpen,
+  onOpenReview,
   onStatusChange,
   silenceTimeoutMs = SILENCE_TIMEOUT_MS,
 }) => {
@@ -140,7 +151,11 @@ const createRemoteHelperWatcher = ({
     }
     // `then` also turns a synchronous throw from onOpen into a rejection.
     Promise.resolve()
-      .then(() => onOpen(host, request.path))
+      .then(() =>
+        'path' in request
+          ? onOpen(host, request.path)
+          : onOpenReview?.(host, request.connectionFile),
+      )
       .catch(() => {});
   };
 

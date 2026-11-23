@@ -62,12 +62,14 @@ declare global {
         ask: (
           request: AssistedReviewQuestion,
         ) => Promise<{ delivery: string; question_id: string }>;
+        endReview: () => Promise<void>;
         getStatus: () => Promise<AssistedReviewStatus | null>;
         onUpdate: (listener: (update: AssistedReviewUpdate) => void) => () => void;
         saveComments: (
           comments: Readonly<Record<string, ReadonlyArray<AssistedReviewComment>>>,
         ) => Promise<unknown>;
         saveReviewed: (reviewed: Readonly<Record<string, number>>) => Promise<unknown>;
+        setCommit: (index: number) => Promise<void>;
       };
       completePlan: (review: PlanReview, status: PlanHandoffStatus) => Promise<void>;
       createWalkthroughCommit: (

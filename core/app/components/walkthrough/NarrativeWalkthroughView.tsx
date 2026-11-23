@@ -5,7 +5,6 @@ import { CaretRightIcon as CaretRight } from '@phosphor-icons/react/CaretRight';
 import { CheckIcon as Check } from '@phosphor-icons/react/Check';
 import { GitBranchIcon as GitBranch } from '@phosphor-icons/react/GitBranch';
 import { PathIcon as Path } from '@phosphor-icons/react/Path';
-import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/ShareNetwork';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ReviewIdentity } from '../../../lib/app-types.ts';
 import type { ReviewScrollBehavior } from '../../../lib/app-types.ts';
@@ -36,7 +35,13 @@ import {
   type CommitMessageHandler,
   type CommitOutputSubscriber,
 } from './CommitView.tsx';
-import { ChapterIcon, ImportancePill, Narration } from './parts.tsx';
+import {
+  ChapterIcon,
+  type EndReviewAction,
+  ImportancePill,
+  Narration,
+  walkthroughFinishAction,
+} from './parts.tsx';
 import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
 
 type FocusedRunDiff = {
@@ -293,16 +298,14 @@ const createSupportBlocks = (
 
 function Arc({
   committable,
+  finish,
   navigation,
-  onShareWalkthrough,
-  shareWalkthroughDisabled = false,
   supportAvailable,
   walkthroughView,
 }: {
   committable: boolean;
+  finish: ReturnType<typeof walkthroughFinishAction>;
   navigation: NarrativeNavigation;
-  onShareWalkthrough?: () => void;
-  shareWalkthroughDisabled?: boolean;
   supportAvailable: boolean;
   walkthroughView: WalkthroughView;
 }) {
@@ -469,13 +472,13 @@ function Arc({
             </div>
           </>
         ) : null}
-        {committable || onShareWalkthrough ? (
+        {committable || finish ? (
           <>
             <span className="wt-arc-join dashed" />
             <div className="wt-arc-chapter">
               <span className="wt-arc-chapter-label">
-                {committable ? <GitBranch size={13} /> : <ShareNetwork size={13} />}
-                {committable && onShareWalkthrough ? 'Finish' : committable ? 'Commit' : 'Share'}
+                {committable ? <GitBranch size={13} /> : finish ? <finish.Icon size={13} /> : null}
+                {committable && finish ? 'Finish' : committable ? 'Commit' : finish?.heading}
               </span>
               <div className="wt-arc-nodes wt-arc-action-nodes">
                 {committable ? (
@@ -488,18 +491,16 @@ function Arc({
                     <GitBranch size={13} />
                   </button>
                 ) : null}
-                {onShareWalkthrough ? (
+                {finish ? (
                   <button
-                    aria-label={
-                      shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough'
-                    }
+                    aria-label={finish.label}
                     className="wt-arc-node wt-arc-share-node"
-                    disabled={shareWalkthroughDisabled}
-                    onClick={onShareWalkthrough}
-                    title={shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough'}
+                    disabled={finish.disabled}
+                    onClick={finish.onClick}
+                    title={finish.title}
                     type="button"
                   >
-                    <ShareNetwork aria-hidden size={13} />
+                    <finish.Icon aria-hidden size={13} />
                   </button>
                 ) : null}
               </div>
@@ -516,6 +517,7 @@ function Arc({
 
 export function NarrativeWalkthroughView({
   allowCommit = true,
+  endReview,
   files,
   navigation,
   onActiveReviewTargetChange,
@@ -530,6 +532,8 @@ export function NarrativeWalkthroughView({
   walkthrough,
 }: {
   allowCommit?: boolean;
+  /** An assisted review: ending the round replaces sharing. */
+  endReview?: EndReviewAction;
   files: ReadonlyArray<ChangedFile>;
   navigation: NarrativeNavigation;
   onActiveReviewTargetChange: (target: WalkthroughReviewTarget | null) => void;
@@ -713,9 +717,12 @@ export function NarrativeWalkthroughView({
     >
       <Arc
         committable={committable}
+        finish={walkthroughFinishAction({
+          endReview,
+          onShareWalkthrough,
+          shareWalkthroughDisabled,
+        })}
         navigation={navigation}
-        onShareWalkthrough={onShareWalkthrough}
-        shareWalkthroughDisabled={shareWalkthroughDisabled}
         supportAvailable={supportAvailable}
         walkthroughView={walkthroughView}
       />

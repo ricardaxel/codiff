@@ -400,7 +400,10 @@ export const parseArguments = (args) => {
   // A bare flag parses as `true` and means "discover the review for this repository" ('1').
   const assistedReview =
     typeof values['assisted-review'] === 'string'
-      ? resolve(values['assisted-review'])
+      ? // A remote connection file, addressed like a `--remote` repository, is not a local path.
+        values['assisted-review'].startsWith('ssh://')
+        ? values['assisted-review']
+        : resolve(values['assisted-review'])
       : values['assisted-review'] === true
         ? '1'
         : null;

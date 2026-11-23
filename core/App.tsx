@@ -4,6 +4,7 @@ import { PathIcon as Path } from '@phosphor-icons/react/Path';
 import { TreeStructureIcon as TreeStructure } from '@phosphor-icons/react/TreeStructure';
 import type { FileDiffLoadedFiles } from '@pierre/diffs';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AssistedReviewCommitBar } from './app/components/AssistedReviewCommitBar.tsx';
 import { CommandBar } from './app/components/CommandBar.tsx';
 import { KeyboardShortcutsHelp } from './app/components/KeyboardShortcutsHelp.tsx';
 import { OpenReviewSourceDialog } from './app/components/OpenReviewSourceDialog.tsx';
@@ -73,6 +74,7 @@ import {
   type SourceSession,
   type WalkthroughNote,
 } from './lib/app-types.ts';
+import { assistedReviewViewKey } from './lib/assisted-review.ts';
 import {
   isPatchOnlyDiffSection,
   shouldLoadDiffSectionContents,
@@ -397,6 +399,7 @@ export default function App({
     walkthroughSharing,
     walkthroughUnread,
   } = useAppWalkthrough({
+    assistedReviewStatus: assistedReview.status,
     preferencesRef,
     state,
     stateGenerationRef,
@@ -1520,6 +1523,16 @@ export default function App({
   // process instead of reloading the window.
   useEffect(() => window.codiff.onRefreshRequest(refreshRepository), [refreshRepository]);
 
+  // Re-read the diff when the bridge's current commit moves (whichever front end moved it) or
+  // the agent begins the next review round.
+  const reviewView = assistedReviewViewKey(assistedReview.status);
+  const shownView = assistedReviewViewKey(state?.assistedReview?.status);
+  useEffect(() => {
+    if (stateRef.current?.assistedReview && reviewView !== shownView) {
+      refreshRepository();
+    }
+  }, [refreshRepository, reviewView, shownView]);
+
   useEffect(() => {
     const writeCurrentReloadSelection = () => {
       writeReloadSelection(
@@ -2104,6 +2117,12 @@ export default function App({
                 {state.branch}
               </span>
             ) : null}
+            {assistedReview.status ? (
+              <AssistedReviewCommitBar
+                onSelect={(index) => void window.codiff.assistedReview.setCommit(index)}
+                status={assistedReview.status}
+              />
+            ) : null}
             {sidebarSourceLabel ? (
               pullRequestUrl ? (
                 <a
@@ -2204,6 +2223,7 @@ export default function App({
           commitFiles={state.files}
           commitViewOpen={showPlainCommitView}
           currentSource={pendingSource ?? state.source}
+          endReview={assistedReview.endReview}
           files={visibleFiles}
           historyEntries={historyEntries}
           historyHasMore={historyHasMore}
@@ -2259,6 +2279,7 @@ export default function App({
           />
         ) : showNarrativeWalkthrough && narrativeWalkthrough ? (
           <NarrativeWalkthroughView
+            endReview={assistedReview.endReview}
             files={state.files}
             navigation={narrativeNavigation}
             onActiveReviewTargetChange={updateActiveWalkthroughReviewTarget}

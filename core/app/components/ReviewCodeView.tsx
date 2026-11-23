@@ -99,7 +99,7 @@ import {
 } from '../../lib/identifier-navigation.ts';
 import { getItemVersion } from '../../lib/item-version.ts';
 import { isNativeInputTarget, isPrimaryModifier } from '../../lib/keyboard.ts';
-import { sanitizeMarkdownImages } from '../../lib/markdown.tsx';
+import { renderBlockMarkdown, sanitizeMarkdownImages } from '../../lib/markdown.tsx';
 import { isGeneratedWalkthroughFile } from '../../lib/narrative-walkthrough-diff.js';
 import {
   getCommentKey,
@@ -2296,7 +2296,10 @@ function CodeQualityAnnotation({
           {finding.status === 'new' ? <span className="code-quality-finding-new">New</span> : null}
         </div>
         <div className="code-quality-finding-content">
-          <p>{finding.description}</p>
+          {/* Agent annotations are Markdown, like the comments around them. */}
+          <div className="code-quality-finding-description">
+            {renderBlockMarkdown(finding.description)}
+          </div>
           {finding.engineName ? <span>{finding.engineName}</span> : null}
         </div>
       </div>

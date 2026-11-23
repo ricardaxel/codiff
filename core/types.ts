@@ -260,27 +260,56 @@ export type AssistedReviewStatus = {
     side: 'new' | 'old';
     text: string;
   }>;
+  /** The agent needs the user in its conversation, and why; null otherwise. */
+  attention?: { id: string; text: string } | null;
   base_commit: string;
   branch: string;
   briefing: string;
+  chapters?: ReadonlyArray<{ blurb?: string; icon?: WalkthroughIcon; id: string; title: string }>;
   comments: Readonly<Record<string, ReadonlyArray<AssistedReviewComment>>>;
+  /** Commits mode: the branch's commits, oldest first; empty for a full-diff review. */
+  commits?: ReadonlyArray<{ parent: string; prepared: boolean; sha: string; subject: string }>;
+  /** Commits mode: the commit every front end shows, else null. */
+  current_commit?: string | null;
+  /** The user ended this round; the agent is handling their comments. */
+  ended?: boolean;
+  mode?: 'commits' | 'full';
   questions: Readonly<Record<string, 'acknowledged' | 'answered' | 'queued'>>;
   review_id: string;
   /** Marks keyed `"<old blob> <new blob> <path>"` (as review.nvim writes them) with epoch seconds. */
   reviewed: Readonly<Record<string, number>>;
+  /** Review round, from 1; the agent begins the next one after the user ends this one. */
+  round?: number;
   stale: boolean;
-  stops: ReadonlyArray<{
-    file: string;
-    id: string;
-    line: number;
-    line_end: number;
-    side: 'new' | 'old';
-    title: string;
+  stops: ReadonlyArray<
+    AssistedReviewAnchor & {
+      also?: ReadonlyArray<AssistedReviewAnchor>;
+      chapter?: string;
+      id: string;
+      importance?: 'critical' | 'normal' | 'context';
+      prose?: string;
+      summary?: string;
+      title: string;
+    }
+  >;
+  support?: ReadonlyArray<{
+    anchors: ReadonlyArray<AssistedReviewAnchor>;
+    note?: string;
+    reason: string;
   }>;
+};
+
+export type AssistedReviewAnchor = {
+  file: string;
+  line: number;
+  line_end: number;
+  side: 'new' | 'old';
 };
 
 export type AssistedReviewComment = {
   branch?: string;
+  /** Commits mode: the commit the comment was made on. */
+  commit?: string;
   created_at?: number;
   file: string;
   id: string;

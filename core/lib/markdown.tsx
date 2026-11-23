@@ -283,3 +283,55 @@ export const renderInlineMarkdown = (text: string): ReactNode => {
 
   return nodes.length > 0 ? nodes : text;
 };
+
+/**
+ * Block Markdown for agent-written text: `#` headings, `-`/`*`/`1.` lists and paragraphs, each with
+ * inline Markdown. Enough for briefings and narration; anything else reads as plain text.
+ */
+export const renderBlockMarkdown = (text: string): Array<ReactNode> => {
+  const blocks: Array<ReactNode> = [];
+  let paragraph: Array<string> = [];
+  let list: { items: Array<string>; ordered: boolean } | null = null;
+  const flush = () => {
+    if (paragraph.length) {
+      blocks.push(<p key={blocks.length}>{renderInlineMarkdown(paragraph.join(' '))}</p>);
+      paragraph = [];
+    }
+    if (list) {
+      const items = list.items.map((item, index) => (
+        <li key={index}>{renderInlineMarkdown(item)}</li>
+      ));
+      blocks.push(
+        list.ordered ? <ol key={blocks.length}>{items}</ol> : <ul key={blocks.length}>{items}</ul>,
+      );
+      list = null;
+    }
+  };
+  for (const line of text.split('\n')) {
+    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    const item = /^\s*(?:[-*+]|(\d+)[.)])\s+(.*)$/.exec(line);
+    if (!line.trim()) {
+      flush();
+    } else if (heading) {
+      flush();
+      blocks.push(<h4 key={blocks.length}>{renderInlineMarkdown(heading[1])}</h4>);
+    } else if (item) {
+      const ordered = item[1] != null;
+      if (paragraph.length || (list && list.ordered !== ordered)) {
+        flush();
+      }
+      list ??= { items: [], ordered };
+      list.items.push(item[2]);
+    } else if (list && /^\s/.test(line)) {
+      // An indented line continues the last list item.
+      list.items[list.items.length - 1] += ` ${line.trim()}`;
+    } else {
+      if (list) {
+        flush();
+      }
+      paragraph.push(line.trim());
+    }
+  }
+  flush();
+  return blocks;
+};

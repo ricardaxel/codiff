@@ -14,10 +14,37 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.wt-focus p {
+.wt-focus-body {
   color: var(--sidebar-text);
   font: 12px/1.5 var(--font-sans);
   text-wrap: pretty;
+  /* An assisted review's briefing is block Markdown; bound its height. */
+  max-height: 30vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.wt-focus-body h4 {
+  color: var(--text);
+  font: 600 11px/1.4 var(--font-sans);
+  margin: 8px 0 2px;
+}
+.wt-focus-body p,
+.wt-focus-body ul,
+.wt-focus-body ol,
+.wt-narration-prose p,
+.wt-narration-prose ul,
+.wt-narration-prose ol {
+  margin: 4px 0;
+}
+.wt-focus-body ul,
+.wt-focus-body ol,
+.wt-narration-prose ul,
+.wt-narration-prose ol {
+  padding-left: 18px;
+}
+.wt-narration-prose h4 {
+  font: 600 14px/1.4 var(--font-sans);
+  margin: 8px 0 4px;
 }
 
 .wt-toc-scroll {

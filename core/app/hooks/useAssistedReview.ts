@@ -10,6 +10,9 @@ import {
 } from 'react';
 import type { ReviewComment } from '../../lib/app-types.ts';
 import {
+  assistedReviewNotice,
+  assistedReviewViewKey,
+  endReviewLabel,
   commentsFromBridge,
   commentsToBridge,
   findingsFromAnnotations,
@@ -74,10 +77,17 @@ export function useAssistedReview({
   const questionsRef = useRef(new Map<string, { commentId: string; file: string }>());
   const askCountRef = useRef(0);
   const blocked = error != null || status?.stale === true;
+  // The commit (commits mode) and the round and commit whose diff the shown comments belong to.
+  const hydratedCommitRef = useRef<string | null>(null);
+  const hydratedViewRef = useRef<string | null>(null);
 
   const hydrateComments = useCallback(
     (current: RepositoryState, next: AssistedReviewStatus) => {
-      const { retained, shown } = commentsFromBridge(current, next.comments);
+      // The commit this state's diff shows, which may lag a newer status while it is re-read.
+      const commit = current.assistedReview?.status.current_commit ?? null;
+      const { retained, shown } = commentsFromBridge(current, next.comments, commit);
+      hydratedCommitRef.current = commit;
+      hydratedViewRef.current = assistedReviewViewKey(current.assistedReview?.status);
       retainedRef.current = retained;
       syncedRef.current = next.comments as ReturnType<typeof commentsToBridge>;
       setReviewComments(shown);
@@ -138,8 +148,13 @@ export function useAssistedReview({
     if (!hydratedRef.current) {
       hydratedRef.current = true;
       hydrateComments(state, attached);
+    } else if (assistedReviewViewKey(attached) !== hydratedViewRef.current) {
+      // A state read for another commit or round: show its comments and viewed marks.
+      const latest = statusRef.current ?? attached;
+      hydrateComments(state, latest);
+      setViewed(viewedFromReviewed(state, latest.reviewed));
     }
-  }, [attached, hydrateComments, state, statusRef]);
+  }, [attached, hydrateComments, setViewed, state, statusRef]);
 
   useEffect(() => {
     if (!active) {
@@ -159,7 +174,11 @@ export function useAssistedReview({
     if (!active || blocked || syncedRef.current == null) {
       return;
     }
-    const comments = commentsToBridge(reviewComments, retainedRef.current);
+    const comments = commentsToBridge(
+      reviewComments,
+      retainedRef.current,
+      hydratedCommitRef.current,
+    );
     if (sameComments(comments, syncedRef.current)) {
       return;
     }
@@ -264,11 +283,32 @@ export function useAssistedReview({
     [active, status],
   );
 
+  // Ends the round; a failure (agent unreachable) leaves it open so the user can retry.
+  const [endError, setEndError] = useState<string | null>(null);
+  const endReview = useMemo(
+    () =>
+      status
+        ? {
+            ...endReviewLabel(status),
+            ended: status.ended === true,
+            onEnd: () => {
+              setEndError(null);
+              window.codiff.assistedReview
+                .endReview()
+                .catch((error_: unknown) => setEndError(messageOf(error_)));
+            },
+          }
+        : undefined,
+    [status],
+  );
+
   const notice = error
     ? `Lost the review bridge: ${error}. Nothing more is saved; ask the agent to begin a new review.`
-    : status?.stale
-      ? 'This review is stale: tracked files changed since the agent began it. Ask it to begin a new review.'
-      : null;
+    : endError
+      ? `Could not end the review round: ${endError}`
+      : status
+        ? assistedReviewNotice(status)
+        : null;
 
-  return { active, ask, findings, notice, saveViewed };
+  return { active, ask, endReview, findings, notice, saveViewed, status };
 }

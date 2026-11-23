@@ -5,7 +5,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
-const { gitBufferWithInput } = require('../git-state/common.cjs');
+const { git: repositoryGit, gitBufferWithInput } = require('../git-state/common.cjs');
+const { parseRemoteRepositoryPath, runRemoteCommand } = require('../remote-repository.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -19,16 +20,42 @@ const git = async (root, args, env = {}) =>
     })
   ).stdout;
 
+// snapshotWorktree, as one script on the host of a remote repository ($1: its root there).
+const REMOTE_SNAPSHOT_SCRIPT = `set -eu
+root=$1
+index=$(git -C "$root" rev-parse --git-path index)
+case "$index" in /*) ;; *) index="$root/$index" ;; esac
+directory=$(mktemp -d)
+trap 'rm -rf "$directory"' EXIT
+cp -- "$index" "$directory/index"
+mtime=$(stat -c %Y -- "$index" 2>/dev/null || stat -f %m -- "$index")
+mtime=$((mtime - 1))
+touch -d "@$mtime" -- "$directory/index" 2>/dev/null ||
+  touch -t "$(date -r "$mtime" +%Y%m%d%H%M.%S)" -- "$directory/index"
+export GIT_INDEX_FILE="$directory/index"
+git -C "$root" add -u
+tree=$(git -C "$root" write-tree)
+GIT_AUTHOR_EMAIL=codiff@localhost GIT_AUTHOR_NAME=codiff \\
+  GIT_COMMITTER_EMAIL=codiff@localhost GIT_COMMITTER_NAME=codiff \\
+  git -C "$root" commit-tree "$tree" -p HEAD -m 'assisted-review snapshot'`;
+
 /**
  * Commits the tracked working tree (index plus unstaged edits, untracked files excluded) as a
  * dangling commit, so the ref-to-ref comparison machinery can diff `base..snapshot`. This is
  * exactly the bridge's scope: `git diff <base_commit> --`. The repository's own index and refs are
  * never touched; only unreachable objects are added.
  *
- * @param {string} root git toplevel
+ * @param {string} root git toplevel, local or a remote repository path
  * @returns {Promise<string>} commit id
  */
 const snapshotWorktree = async (root) => {
+  const remote = parseRemoteRepositoryPath(root);
+  if (remote) {
+    // The same steps, with the temporary index on the remote host.
+    return (await runRemoteCommand(remote, ['sh', '-c', REMOTE_SNAPSHOT_SCRIPT, 'sh', remote.path]))
+      .toString('utf8')
+      .trim();
+  }
   const index = path.resolve(root, (await git(root, ['rev-parse', '--git-path', 'index'])).trim());
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codiff-ar-index-'));
   try {
@@ -132,7 +159,8 @@ const sliceLines = (content, line, lineEnd) => {
  */
 const readVisibleCode = async (root, base, snapshot, range) =>
   sliceLines(
-    await git(root, ['show', `${range.side === 'old' ? base : snapshot}:${range.file}`]),
+    // Remote-aware: the file is read on the repository's own host.
+    await repositoryGit(root, ['show', `${range.side === 'old' ? base : snapshot}:${range.file}`]),
     range.line,
     range.line_end,
   );

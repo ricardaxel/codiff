@@ -13,15 +13,25 @@ timeout="${CODIFF_REQUEST_TIMEOUT:-10}"
 usage() {
   cat <<'EOF'
 Usage: codiff -r [path]
+       codiff --assisted-review [connection_file]
 
 Open the Git repository containing path (default: the current directory) in
 Codiff on your workstation. Codiff must be running there, with this host added
-through `codiff --install-remote-helper <host>`.
+through `codiff --install-remote-helper <host>`. A live assisted review of that
+repository on this host opens with it.
+
+--assisted-review opens the review of one connection file (as the review bridge
+suggests it); without one, it is `codiff -r` for the current directory.
 EOF
 }
 
+kind=open
 case "${1:-}" in
   -r | --remote) shift ;;
+  --assisted-review)
+    shift
+    [ "$#" -gt 0 ] && kind=review
+    ;;
   -h | --help)
     usage
     exit 0
@@ -36,15 +46,25 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
-target="${1:-.}"
-if ! root="$(git -C "$target" rev-parse --show-toplevel 2>/dev/null)" || [ -z "$root" ]; then
-  printf 'codiff: not a Git repository: %s\n' "$target" >&2
-  exit 1
+if [ "$kind" = review ]; then
+  target="$1"
+  case "$target" in /*) ;; *) target="$PWD/$target" ;; esac
+  if [ ! -f "$target" ]; then
+    printf 'codiff: no connection file: %s\n' "$1" >&2
+    exit 1
+  fi
+  root="$target"
+else
+  target="${1:-.}"
+  if ! root="$(git -C "$target" rev-parse --show-toplevel 2>/dev/null)" || [ -z "$root" ]; then
+    printf 'codiff: not a Git repository: %s\n' "$target" >&2
+    exit 1
+  fi
 fi
 case "$root" in
   *'
 '*)
-    printf '%s\n' 'codiff: repository paths containing newlines are not supported.' >&2
+    printf '%s\n' 'codiff: paths containing newlines are not supported.' >&2
     exit 1
     ;;
 esac
@@ -65,7 +85,7 @@ esac
 kill -0 "$watcher" 2>/dev/null || not_connected
 
 request="$dir/$(date +%s)-$$.req"
-printf 'open %s\n' "$root" > "$request.tmp"
+printf '%s %s\n' "$kind" "$root" > "$request.tmp"
 mv "$request.tmp" "$request"
 
 # The watcher removes the request as soon as it claims it.

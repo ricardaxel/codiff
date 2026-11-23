@@ -1,11 +1,9 @@
 import type { MarkdownEditor as MarkdownEditorComponent } from '@nkzw/mdx-editor';
-import { CheckIcon as Check } from '@phosphor-icons/react/Check';
-import { Copy as LucideCopy } from 'lucide-react';
-import type { ComponentProps, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import { Suspense, useCallback, useMemo } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
+import { Suspense, useMemo } from 'react';
 import { renderInlineMarkdown } from '../../lib/markdown.tsx';
+import { CopyCodeButton } from './CopyCodeButton.tsx';
 import { MarkdownEditor } from './LazyMarkdownEditor.tsx';
-import { useCopiedState } from './useCopiedState.ts';
 
 type MarkdownEditorProps = ComponentProps<typeof MarkdownEditorComponent>;
 
@@ -203,54 +201,13 @@ const getOwnFencedCode = (parts: ReadonlyArray<MarkdownPart>) =>
     .flatMap((part) => extractFencedCodeBlocks(part.value))
     .join('\n\n');
 
-function CopyCodeButton({ code }: { code: string }) {
-  const [copied, markCopied] = useCopiedState(1600);
-
-  const handleClick = useCallback(
-    async (event: ReactMouseEvent<HTMLButtonElement>) => {
-      // The button lives inside `<summary>`, which would otherwise toggle.
-      event.preventDefault();
-      event.stopPropagation();
-      try {
-        await navigator.clipboard.writeText(code);
-      } catch {
-        return;
-      }
-      markCopied();
-    },
-    [code, markCopied],
-  );
-
-  const label = copied ? 'Code copied' : 'Copy code';
-
-  return (
-    <button
-      aria-label={label}
-      className={`codiff-copy-path-button codiff-copy-code-button${copied ? ' copied' : ''}`}
-      onClick={(event) => void handleClick(event)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.stopPropagation();
-        }
-      }}
-      title={label}
-      type="button"
-    >
-      {copied ? (
-        <Check aria-hidden className="codiff-copy-path-icon check" size={16} weight="bold" />
-      ) : (
-        <LucideCopy aria-hidden className="codiff-copy-path-icon" size={16} strokeWidth={2.25} />
-      )}
-    </button>
-  );
-}
-
 function MarkdownSegment({
   additionalPlugins,
   ariaLabel,
   contentClassName,
   editorClassName,
   onHeightChange,
+  prepareMarkdown,
   value,
 }: {
   additionalPlugins?: MarkdownEditorProps['additionalPlugins'];
@@ -258,6 +215,7 @@ function MarkdownSegment({
   contentClassName?: string;
   editorClassName?: string;
   onHeightChange?: (height: number) => void;
+  prepareMarkdown?: (value: string) => string;
   value: string;
 }) {
   const normalizedValue = normalizeReadOnlyMarkdownValue(value);
@@ -276,9 +234,10 @@ function MarkdownSegment({
         density="compact"
         onHeightChange={onHeightChange}
         readOnly
+        renderDiagrams
         spellCheck={false}
         suppressHtmlProcessing
-        value={normalizedValue}
+        value={prepareMarkdown ? prepareMarkdown(normalizedValue) : normalizedValue}
         variant="embedded"
       />
     </div>
@@ -292,6 +251,7 @@ function MarkdownParts({
   editorClassName,
   onHeightChange,
   parts,
+  prepareMarkdown,
 }: {
   additionalPlugins?: MarkdownEditorProps['additionalPlugins'];
   ariaLabel: string;
@@ -299,6 +259,7 @@ function MarkdownParts({
   editorClassName?: string;
   onHeightChange?: (height: number) => void;
   parts: ReadonlyArray<MarkdownPart>;
+  prepareMarkdown?: (value: string) => string;
 }) {
   return parts.map((part, index) => {
     if (part.type === 'markdown') {
@@ -310,6 +271,7 @@ function MarkdownParts({
           editorClassName={editorClassName}
           key={`markdown:${index}`}
           onHeightChange={onHeightChange}
+          prepareMarkdown={prepareMarkdown}
           value={part.value}
         />
       );
@@ -338,6 +300,7 @@ function MarkdownParts({
           editorClassName={editorClassName}
           onHeightChange={onHeightChange}
           parts={bodyParts}
+          prepareMarkdown={prepareMarkdown}
         />
       </details>
     );
@@ -352,6 +315,7 @@ export function ReadOnlyMarkdownView({
   density = 'document',
   fallback,
   onHeightChange,
+  prepareMarkdown,
   value,
   variant = 'plain',
 }: {
@@ -362,6 +326,7 @@ export function ReadOnlyMarkdownView({
   density?: MarkdownEditorProps['density'];
   fallback?: ReactNode;
   onHeightChange?: (height: number) => void;
+  prepareMarkdown?: (value: string) => string;
   value: string;
   variant?: MarkdownEditorProps['variant'];
 }) {
@@ -391,9 +356,10 @@ export function ReadOnlyMarkdownView({
             density={density}
             onHeightChange={onHeightChange}
             readOnly
+            renderDiagrams
             spellCheck={false}
             suppressHtmlProcessing
-            value={normalizedValue}
+            value={prepareMarkdown ? prepareMarkdown(normalizedValue) : normalizedValue}
             variant={variant}
           />
         </div>
@@ -415,6 +381,7 @@ export function ReadOnlyMarkdownView({
           editorClassName={className}
           onHeightChange={onHeightChange}
           parts={parts}
+          prepareMarkdown={prepareMarkdown}
         />
       </div>
     </Suspense>

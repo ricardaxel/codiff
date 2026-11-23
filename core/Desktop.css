@@ -1,3 +1,18 @@
+/* Keep the native title bar draggable before the app's toolbar is available.
+   Attach this to the root so loading animations and transforms cannot move it. */
+#root:empty::before,
+#root:has(> .loading)::before,
+#root:has(> .empty-state)::before {
+  -webkit-app-region: drag;
+  content: '';
+  height: 40px;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 20;
+}
+
 .open-review-source-trigger[aria-expanded='true'] {
   background: rgb(127 127 127 / 0.2);
   color: var(--sidebar-text);

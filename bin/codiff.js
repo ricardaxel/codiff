@@ -19,6 +19,7 @@ import { completionShells, generateCompletionScript } from './completions.js';
 import { waitForPlanResult } from './plan-result.js';
 import { runUpdateCommand } from './update-command.js';
 import { getUpdateNotice } from './update-notice.js';
+import { waitForWalkthroughResult } from './walkthrough-result.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -342,6 +343,14 @@ const run = async () => {
     ? mkdtempSync(join(tmpdir(), 'codiff-plan-result-'))
     : null;
   const planResultPath = planResultDirectory ? join(planResultDirectory, 'result.json') : '';
+  // The app launches detached, so wait for it to report whether it applied the
+  // walkthrough file; otherwise a file it rejects would still exit 0 here.
+  const walkthroughResultDirectory = walkthroughFilePath
+    ? mkdtempSync(join(tmpdir(), 'codiff-walkthrough-result-'))
+    : null;
+  const walkthroughResultPath = walkthroughResultDirectory
+    ? join(walkthroughResultDirectory, 'result.txt')
+    : '';
   const childEnv = {
     ...process.env,
     CODIFF_AGENT_BACKEND: agentBackend ?? '',
@@ -360,6 +369,7 @@ const run = async () => {
     CODIFF_WALKTHROUGH: walkthrough ? '1' : '',
     CODIFF_WALKTHROUGH_CONTEXT: walkthroughContextPath ?? '',
     CODIFF_WALKTHROUGH_FILE: walkthroughFilePath ?? '',
+    CODIFF_WALKTHROUGH_RESULT_FILE: walkthroughResultPath,
     ELECTRON_RENDERER_URL: rendererURL,
   };
 
@@ -399,6 +409,22 @@ const run = async () => {
       process.exitCode = 1;
     } finally {
       rmSync(planResultDirectory, { force: true, recursive: true });
+    }
+  }
+  if (walkthroughResultDirectory) {
+    try {
+      const result = await waitForWalkthroughResult(walkthroughResultPath, child);
+      if (result.status === 'unavailable') {
+        process.stderr.write(`${result.reason}\n`);
+        process.exitCode = 1;
+      }
+    } catch (error) {
+      process.stderr.write(
+        `${error instanceof Error ? error.message : 'Codiff could not load the walkthrough.'}\n`,
+      );
+      process.exitCode = 1;
+    } finally {
+      rmSync(walkthroughResultDirectory, { force: true, recursive: true });
     }
   }
 };

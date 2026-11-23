@@ -158,6 +158,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       remote: {
         type: 'string',
       },
+      'walkthrough-result-file': {
+        type: 'string',
+      },
     },
     strict: false,
   });
@@ -273,6 +276,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     ? process.env.CODIFF_WALKTHROUGH_CONTEXT || ''
     : '';
   const envWalkthroughFilePath = useEnvironment ? process.env.CODIFF_WALKTHROUGH_FILE || '' : '';
+  const envWalkthroughResultFilePath = useEnvironment
+    ? process.env.CODIFF_WALKTHROUGH_RESULT_FILE || ''
+    : '';
   const codexSessionId =
     (typeof values['codex-session'] === 'string' ? values['codex-session'] : '') ||
     envCodexSessionId ||
@@ -311,6 +317,12 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   const walkthroughFilePath =
     (typeof values['walkthrough-file'] === 'string' ? values['walkthrough-file'] : '') ||
     envWalkthroughFilePath ||
+    undefined;
+  const walkthroughResultFilePath =
+    (typeof values['walkthrough-result-file'] === 'string'
+      ? values['walkthrough-result-file']
+      : '') ||
+    envWalkthroughResultFilePath ||
     undefined;
   const sourcePullRequestNumber = envPullRequestNumber ?? pullRequestNumber;
   const sourceReviewProvider =
@@ -371,6 +383,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
         ? { walkthroughContext: readWalkthroughContext(walkthroughContextPath, codexSessionId) }
         : {}),
       ...(walkthroughFilePath ? { walkthroughFile: resolve(walkthroughFilePath) } : {}),
+      ...(walkthroughResultFilePath
+        ? { walkthroughResultFile: resolve(walkthroughResultFilePath) }
+        : {}),
     },
     pullRequestNumber: sourcePullRequestNumber,
     ...(sourceReviewProvider ? { pullRequestProvider: sourceReviewProvider } : {}),

@@ -231,13 +231,45 @@ show_help() {
   printf '  %-32s%s%s%s\n' "codiff --share HEAD" "$gray" "Share a walkthrough for a commit." "$reset"
 }
 
+# Windows and Linux packages put the `codiff` executable next to resources/,
+# three levels above this script. macOS bundles have no such file.
+packaged_executable_path() {
+  for candidate in "$script_dir/../../../codiff.exe" "$script_dir/../../../codiff"; do
+    if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The app reports its native PID. In Git Bash that is a Windows PID, which the
+# MSYS `kill` cannot see, so ask Windows instead.
+is_process_running() {
+  kill -0 "$1" 2>/dev/null && return 0
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*)
+      tasklist //FI "PID eq $1" //NH 2>/dev/null | grep -q "[[:space:]]$1[[:space:]]"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+bundled_electron_path() {
+  electron_exec="$(ls "$app_path/Contents/MacOS/" 2>/dev/null | head -n 1)"
+  if [ -n "$electron_exec" ]; then
+    printf '%s\n' "$app_path/Contents/MacOS/$electron_exec"
+    return 0
+  fi
+  packaged_executable_path
+}
+
 resolve_runtime() {
   runtime="${CODIFF_NODE_COMMAND:-}"
   if [ -z "$runtime" ]; then
-    electron_exec="$(ls "$app_path/Contents/MacOS/" 2>/dev/null | head -n 1)"
-    if [ -n "$electron_exec" ]; then
-      runtime="$app_path/Contents/MacOS/$electron_exec"
-    fi
+    runtime="$(bundled_electron_path || true)"
   fi
   if [ -z "$runtime" ] || [ ! -x "$runtime" ]; then
     printf '%s\n' "codiff: could not find the bundled runtime for $1." >&2
@@ -472,10 +504,9 @@ for arg in "$@"; do
     --walkthrough-guide)
       # The guide is pure text assembled by the Node entry; run it with the
       # bundled Electron as Node so no separate node install is required.
-      electron_exec="$(ls "$app_path/Contents/MacOS/" 2>/dev/null | head -n 1)"
-      if [ -n "$electron_exec" ] && [ -f "$script_dir/codiff.js" ]; then
-        ELECTRON_RUN_AS_NODE=1 "$app_path/Contents/MacOS/$electron_exec" \
-          "$script_dir/codiff.js" --walkthrough-guide
+      electron_path="$(bundled_electron_path || true)"
+      if [ -n "$electron_path" ] && [ -f "$script_dir/codiff.js" ]; then
+        ELECTRON_RUN_AS_NODE=1 "$electron_path" "$script_dir/codiff.js" --walkthrough-guide
       else
         cat "$script_dir/walkthrough-guide.md"
       fi
@@ -672,6 +703,9 @@ open_codiff() {
   if [ -n "$plan_file_path" ]; then
     set -- --plan-file "$plan_file_path" "$@"
   fi
+  if [ -n "$walkthrough_result_file_path" ]; then
+    set -- --walkthrough-result-file "$walkthrough_result_file_path" "$@"
+  fi
   if [ -n "$walkthrough_file_path" ]; then
     set -- --walkthrough-file "$walkthrough_file_path" "$@"
   fi
@@ -694,10 +728,28 @@ open_codiff() {
     set -- --pi-session "$pi_session_id" "$@"
   fi
 
+  # There is no `open` outside macOS, so start the packaged executable directly.
+  if executable_path="$(packaged_executable_path)"; then
+    (
+      unset ELECTRON_RUN_AS_NODE ELECTRON_NO_ATTACH_CONSOLE
+      "$executable_path" "$@" </dev/null >/dev/null 2>&1
+    ) &
+    return 0
+  fi
+
   open -n "$app_path" --args "$@"
 }
 
 print_update_notice
+
+# The app opens detached, so it reports whether it applied the walkthrough file
+# here; otherwise a file it rejects would still exit 0.
+walkthrough_result_file_path=""
+if [ -n "$walkthrough_file_path" ]; then
+  walkthrough_result_directory="$(mktemp -d "${TMPDIR:-/tmp}/codiff-walkthrough-result.XXXXXX")"
+  walkthrough_result_file_path="$walkthrough_result_directory/result.txt"
+  trap 'rm -rf "$walkthrough_result_directory"' EXIT INT TERM
+fi
 
 if [ -n "$plan_file_path" ]; then
   if [ -z "$plan_result_file_path" ]; then
@@ -722,7 +774,7 @@ if [ -n "$plan_file_path" ]; then
         plan_app_pid="$(sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$plan_result_file_path")"
       fi
     fi
-    if [ -n "$plan_app_pid" ] && ! kill -0 "$plan_app_pid" 2>/dev/null; then
+    if [ -n "$plan_app_pid" ] && ! is_process_running "$plan_app_pid"; then
       exit 2
     fi
     plan_open_attempts=$((plan_open_attempts + 1))
@@ -756,4 +808,28 @@ elif [ "$walkthrough" -eq 1 ]; then
   open_codiff --walkthrough "$repository_path"
 else
   open_codiff "$repository_path"
+fi
+
+if [ -n "$walkthrough_result_file_path" ]; then
+  # Covers app startup and the diff read, which can include fetching a pull request.
+  walkthrough_wait_attempts=0
+  while :; do
+    walkthrough_status=""
+    if [ -s "$walkthrough_result_file_path" ]; then
+      walkthrough_status="$(head -n 1 "$walkthrough_result_file_path")"
+    fi
+    if [ "$walkthrough_status" = "ready" ]; then
+      exit 0
+    fi
+    if [ "$walkthrough_status" = "unavailable" ]; then
+      tail -n +2 "$walkthrough_result_file_path" >&2
+      exit 1
+    fi
+    walkthrough_wait_attempts=$((walkthrough_wait_attempts + 1))
+    if [ "$walkthrough_wait_attempts" -ge 1200 ]; then
+      printf '%s\n' "codiff: Codiff did not check the walkthrough within 60 seconds." >&2
+      exit 1
+    fi
+    sleep 0.05
+  done
 fi

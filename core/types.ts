@@ -246,6 +246,8 @@ export type RepositoryState = {
   branch: string | null;
   codeQualityFindings?: ReadonlyArray<PullRequestCodeQualityFinding>;
   commitMetadata?: CommitMetadata;
+  /** Signed GitHub attachment URLs for the local description preview only. */
+  descriptionAssetUrls?: Readonly<Record<string, string>>;
   files: ReadonlyArray<ChangedFile>;
   generalComments?: ReadonlyArray<PullRequestGeneralCommentThread>;
   generatedAt: number;
@@ -253,6 +255,8 @@ export type RepositoryState = {
   reviewComments?: ReadonlyArray<PullRequestExistingReviewComment>;
   root: string;
   source: ReviewSource;
+  /** Remote Viewed files mapped to current fingerprints; absent when unavailable. */
+  viewedFiles?: Readonly<Record<string, string>>;
 };
 
 export type CodiffFeatureFlags = {
@@ -460,6 +464,8 @@ export type CodiffLaunchOptions = {
   walkthroughContext?: WalkthroughContext;
   /** Path to a pre-authored {@link NarrativeWalkthrough} JSON file (--walkthrough-file). */
   walkthroughFile?: string;
+  /** Result file where the app reports whether it applied {@link walkthroughFile}. */
+  walkthroughResultFile?: string;
 };
 
 export type AgentSkillStatus = {
@@ -909,6 +915,12 @@ export type PullRequestReviewEvent = 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES';
 export type SubmitPullRequestCommentRequest = {
   comment: PullRequestReviewComment;
   source: Extract<ReviewSource, { type: 'pull-request' }>;
+};
+
+export type SetPullRequestFileViewedRequest = {
+  path: string;
+  source: Extract<ReviewSource, { type: 'pull-request' }>;
+  viewed: boolean;
 };
 
 export type SubmitPullRequestReviewRequest = {

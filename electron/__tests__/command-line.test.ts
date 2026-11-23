@@ -156,6 +156,27 @@ test('parses plan handoff command-line options', () => {
   });
 });
 
+test('parses walkthrough file result command-line options', () => {
+  expect(
+    readCommandLine([
+      'codiff',
+      '--walkthrough',
+      '--walkthrough-file',
+      '/tmp/walkthrough.json',
+      '--walkthrough-result-file',
+      '/tmp/result.json',
+      '/repo',
+    ]),
+  ).toMatchObject({
+    launchOptions: {
+      walkthrough: true,
+      walkthroughFile: '/tmp/walkthrough.json',
+      walkthroughResultFile: '/tmp/result.json',
+    },
+    repositoryPath: '/repo',
+  });
+});
+
 test('parses positional HEAD revisions as commit sources', () => {
   expect(readCommandLine(['codiff', 'HEAD'])).toEqual({
     launchOptions: {

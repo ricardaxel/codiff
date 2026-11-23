@@ -29,7 +29,7 @@ choose.
   Give every stop a concise semantic `title` in roughly 2-6 words, such as
   `"Prevent duplicate payments"` or `"Preserve offline drafts"`. Never use a filename or path
   as the stop title.
-- **`hunkIds[]`** — deterministic hunk ids copied from the repository digest, in the exact order
+- **`hunkIds[]`** — deterministic hunk ids from the live diff (see "hunkId format"), in the exact order
   Codiff should render them. Default to one review idea per stop, not one hunk per stop. Use
   multiple ids when those hunks implement the same idea, invariant, behavior, or repeated pattern;
   cross-file and out-of-line order is allowed when it improves the review path. For 1-4 total
@@ -44,6 +44,8 @@ choose.
   synthetic hunk per changed section; never split them. Codiff groups generated-only support items
   automatically, but keep behavior-relevant snapshots or artifacts on the main path. Codiff also
   recognizes `linguist-generated` and `gitlab-generated` attributes from `.gitattributes`.
+  Folder-name detection only applies to `__generated__` and `__snapshots__`; other folder names
+  such as `codegen`, `gen`, and `generated` do not imply generated files. Filename rules still apply.
 - **`changeType?` / `commitNote?`** — optional commit composer metadata for committable
   walkthroughs.
 - **`commit?`** — for working-tree walkthroughs, include `title` and `body` when there is enough
@@ -89,6 +91,12 @@ The `<scope>` segment depends on which diff you anchored against:
   - branch comparison (`codiff <branch>` — current branch vs `<branch>`): the resolved
     **`HEAD`** SHA, _not_ `<branch>`.
   - ref range (`codiff base..head` or `base...head`): the resolved SHA of `head`.
+
+## Validation
+
+If a `hunkId` does not resolve, the command exits non-zero and prints the unresolved ids and
+the diff's real ids. Write the JSON with a file-writing tool or a quoted heredoc (`<<'EOF'`):
+in zsh, `"$sha:h1"` expands to `.1`, so write `"${sha}:h1"`.
 
 ## Schema
 

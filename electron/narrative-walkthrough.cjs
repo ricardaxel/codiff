@@ -438,6 +438,49 @@ const addUnreferencedSupport = (support, index, coveredHunkIds, itemIds) => {
   }
 };
 
+const MAX_LISTED_HUNK_IDS = 20;
+
+/** @param {ReadonlyArray<string>} hunkIds */
+const listHunkIds = (hunkIds) =>
+  hunkIds.length > MAX_LISTED_HUNK_IDS
+    ? `${hunkIds.slice(0, MAX_LISTED_HUNK_IDS).join(', ')}, and ${hunkIds.length - MAX_LISTED_HUNK_IDS} more`
+    : hunkIds.join(', ');
+
+/**
+ * Throws when an authored walkthrough references a hunk id outside the live
+ * diff. Normalization would silently drop every stop with one, so this names
+ * the unresolved ids next to the diff's real ids for the author to fix.
+ *
+ * @param {any} input
+ * @param {ReadonlyArray<ChangedFile>} files
+ */
+const assertWalkthroughHunkIdsResolve = (input, files) => {
+  const { hunkById } = indexFiles(files);
+  const groups = [
+    ...(Array.isArray(input?.chapters) ? input.chapters : []).flatMap((chapter) =>
+      Array.isArray(chapter?.stops) ? chapter.stops : [],
+    ),
+    ...(Array.isArray(input?.support) ? input.support : []),
+  ];
+  const unresolvedHunkIds = [
+    ...new Set(
+      groups
+        .flatMap((group) => normalizeStringArray(group?.hunkIds))
+        .filter((hunkId) => !hunkById.has(hunkId)),
+    ),
+  ];
+  if (unresolvedHunkIds.length > 0) {
+    const validHunkIds = [...hunkById.keys()];
+    throw new Error(
+      `Unresolved hunk ids: ${listHunkIds(unresolvedHunkIds)}. ${
+        validHunkIds.length
+          ? `This diff's hunk ids: ${listHunkIds(validHunkIds)}.`
+          : 'This diff has no hunks.'
+      }`,
+    );
+  }
+};
+
 const normalizeNarrativeWalkthrough = (input, files, facts = {}, hunkIdByAlias = new Map()) => {
   if (!input || typeof input !== 'object') {
     throw new Error('Narrative walkthrough is not an object.');
@@ -973,6 +1016,7 @@ const readNarrativeWalkthrough = async (
 };
 
 module.exports = {
+  assertWalkthroughHunkIdsResolve,
   buildNarrativeWalkthroughPrompt,
   getNarrativeWalkthroughCacheKey,
   narrativeWalkthroughSchema,

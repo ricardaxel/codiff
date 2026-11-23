@@ -25,6 +25,7 @@ const {
   readGitIdentity,
   readRepositoryState,
   readWalkthroughRepositoryState,
+  setPullRequestFileViewed,
   submitPullRequestComment,
   submitPullRequestReview,
   validateRepositoryPath,
@@ -87,6 +88,7 @@ const { createSkillInstaller } = require('./main/agent-skill.cjs');
 const { createEditorOpener } = require('./main/editor.cjs');
 const { createDefinitionSearchCoordinator } = require('./definition-search.cjs');
 const { createTerminalHelper } = require('./main/terminal-helper.cjs');
+const { createWalkthroughLaunchController } = require('./main/walkthrough-launch.cjs');
 const { createWindowRevealController } = require('./window-reveal.cjs');
 const {
   MIN_WINDOW_HEIGHT,
@@ -96,6 +98,7 @@ const {
   writeWindowState,
 } = require('./window-state.cjs');
 const {
+  assertWalkthroughHunkIdsResolve,
   getNarrativeWalkthroughCacheKey,
   normalizeNarrativeWalkthrough,
   readNarrativeWalkthrough,
@@ -1036,8 +1039,15 @@ ipcMain.on(
  * @param {string} repositoryPath
  * @param {CodiffLaunchOptions} launchOptions
  * @param {WindowIdentity | null} identity
+ * @param {Promise<RepositoryState>} [preloadedRepositoryState]
  */
-const initializeWindowRepository = (window, repositoryPath, launchOptions, identity) => {
+const initializeWindowRepository = (
+  window,
+  repositoryPath,
+  launchOptions,
+  identity,
+  preloadedRepositoryState = undefined,
+) => {
   const webContentsId = window.webContents.id;
   if (identity) {
     windowIdentities.set(webContentsId, identity);
@@ -1046,7 +1056,8 @@ const initializeWindowRepository = (window, repositoryPath, launchOptions, ident
   windowLaunchOptions.set(webContentsId, launchOptions);
   const initialRepositoryStatePromise = launchOptions.planFile
     ? null
-    : readInitialRepositoryStateWithConfig(repositoryPath, launchOptions);
+    : preloadedRepositoryState ||
+      readInitialRepositoryStateWithConfig(repositoryPath, launchOptions);
   const initialRepositoryState = initialRepositoryStatePromise?.then((state) => {
     if (!window.isDestroyed()) {
       storeResolvedRepositoryState(webContentsId, state);
@@ -1096,11 +1107,14 @@ const getLastUsedWindow = () => {
  * @param {string} repositoryPath
  * @param {CodiffLaunchOptions} [launchOptions]
  * @param {WindowIdentity | null} [identity]
+ * @param {Promise<RepositoryState>} [preloadedRepositoryState]
+ * @returns {import('electron').BrowserWindow}
  */
 const createWindow = (
   repositoryPath,
   launchOptions = { repositoryPathProvided: true, walkthrough: false },
   identity = getWindowIdentity(repositoryPath, launchOptions),
+  preloadedRepositoryState = undefined,
 ) => {
   const savedState = readWindowState();
   const validatedState = savedState
@@ -1156,7 +1170,13 @@ const createWindow = (
     createWindowRevealController(window, useStartupOpacity),
   );
   openWindows.add(window);
-  initializeWindowRepository(window, repositoryPath, launchOptions, identity);
+  initializeWindowRepository(
+    window,
+    repositoryPath,
+    launchOptions,
+    identity,
+    preloadedRepositoryState,
+  );
   window.on('blur', () => repositoryWatcherCoordinator.visibilityChanged(webContentsId));
   window.on('enter-full-screen', () => {
     window.webContents.send('codiff:windowFullScreenChanged', true);
@@ -1248,6 +1268,7 @@ const createWindow = (
     windowRevealControllers.delete(webContentsId);
     windowInitialRepositoryStates.delete(webContentsId);
     windowTitleRepositoryStates.delete(webContentsId);
+    walkthroughLaunchController.clear(webContentsId);
     walkthroughProgressGenerations.delete(webContentsId);
     void reviewHandoffController.dispose(webContentsId);
     windowRepositories.delete(webContentsId);
@@ -1300,6 +1321,7 @@ const createWindow = (
   } else {
     window.loadURL(pathToFileURL(join(root, 'dist/index.html')).toString());
   }
+  return window;
 };
 
 /** @param {import('electron').BrowserWindow} window */
@@ -1399,6 +1421,7 @@ const shareSnapshot = async (context, snapshot) => {
 const focusOrCreateWindow = (
   repositoryPath,
   launchOptions = { repositoryPathProvided: true, walkthrough: false },
+  preloadedRepositoryState = undefined,
 ) => {
   const identity = getWindowIdentity(repositoryPath, launchOptions);
   const matchingWebContentsId = findMatchingWindowIdentity(identity, windowIdentities);
@@ -1411,6 +1434,7 @@ const focusOrCreateWindow = (
 
   if (matchingWindow) {
     if (launchOptions.planFile || launchOptions.walkthrough || launchOptions.walkthroughFile) {
+      walkthroughLaunchController.clear(matchingWebContentsId);
       windowRepositories.set(matchingWebContentsId, identity?.repositoryRoot || repositoryPath);
       windowLaunchOptions.set(matchingWebContentsId, launchOptions);
       if (launchOptions.planFile) {
@@ -1420,7 +1444,8 @@ const focusOrCreateWindow = (
       } else {
         windowInitialRepositoryStates.set(
           matchingWebContentsId,
-          readInitialRepositoryStateWithConfig(repositoryPath, launchOptions),
+          preloadedRepositoryState ||
+            readInitialRepositoryStateWithConfig(repositoryPath, launchOptions),
         );
       }
       if (identity) {
@@ -1432,7 +1457,7 @@ const focusOrCreateWindow = (
     return matchingWindow;
   }
 
-  return createWindow(repositoryPath, launchOptions, identity);
+  return createWindow(repositoryPath, launchOptions, identity, preloadedRepositoryState);
 };
 
 /**
@@ -1467,6 +1492,13 @@ const openInLastUsedWindow = async (repositoryPath, launchOptions) => {
   focusWindow(window);
   return window;
 };
+
+const walkthroughLaunchController = createWalkthroughLaunchController({
+  hasWindows: () => BrowserWindow.getAllWindows().length > 0,
+  openWindow: focusOrCreateWindow,
+  quit: () => app.quit(),
+  readRepositoryState: readInitialRepositoryStateWithConfig,
+});
 
 const INITIAL_UPDATE_CHECK_DELAY_MS = 10 * 1000;
 const UPDATE_CHECK_TIMER_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -1561,7 +1593,7 @@ if (squirrelStartup || !lock) {
     const launchPath = resolveRepositoryPath(
       data.repositoryPath || getCommandLineRepositoryPath(commandLine) || workingDirectory,
     );
-    focusOrCreateWindow(
+    void walkthroughLaunchController.open(
       getInitialRepositoryPath(launchPath, launchOptions, config.settings.lastRepositoryPath),
       launchOptions,
     );
@@ -1601,7 +1633,7 @@ if (squirrelStartup || !lock) {
     setInterval(runScheduledUpdateCheck, UPDATE_CHECK_TIMER_INTERVAL_MS);
 
     const launchOptions = getLaunchOptions();
-    focusOrCreateWindow(
+    void walkthroughLaunchController.open(
       getInitialRepositoryPath(getLaunchPath(), launchOptions, config.settings.lastRepositoryPath),
       launchOptions,
     );
@@ -1649,7 +1681,7 @@ if (squirrelStartup || !lock) {
   });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (BrowserWindow.getAllWindows().length === 0 && !walkthroughLaunchController.hasPending()) {
       const launchOptions = getLaunchOptions();
       focusOrCreateWindow(
         getInitialRepositoryPath(
@@ -1663,7 +1695,7 @@ if (squirrelStartup || !lock) {
   });
 
   app.on('window-all-closed', () => {
-    app.quit();
+    walkthroughLaunchController.quitIfIdle();
   });
 
   app.on('before-quit', (event) => {
@@ -1714,7 +1746,15 @@ ipcMain.handle('codiff:openReleasePage', () => {
 ipcMain.handle('codiff:getRepositoryState', async (event, source) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
   const launchOptions = windowLaunchOptions.get(event.sender.id);
-  const initialState = !source ? windowInitialRepositoryStates.get(event.sender.id) : undefined;
+  const walkthroughState = walkthroughLaunchController.getInitialRepositoryState(
+    event.sender.id,
+    source,
+  );
+  const initialState = walkthroughState
+    ? Promise.resolve(walkthroughState)
+    : !source
+      ? windowInitialRepositoryStates.get(event.sender.id)
+      : undefined;
   if (initialState) {
     windowInitialRepositoryStates.delete(event.sender.id);
   }
@@ -1890,6 +1930,27 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) 
   );
 
   try {
+    const agent = resolveWindowAgent(event.sender.id);
+    const initialWalkthrough = walkthroughLaunchController.takeInitialWalkthrough(
+      event.sender.id,
+      source,
+    );
+    if (initialWalkthrough) {
+      // A walkthrough file needs no agent; with AI off there is no session context to add.
+      const sessionContext = agent
+        ? await Promise.resolve(
+            agent.readSessionContext(launchOptions?.[agent.sessionLaunchOptionKey]),
+          ).catch(() => null)
+        : null;
+      return {
+        status: 'ready',
+        walkthrough: {
+          ...initialWalkthrough,
+          ...(agent ? { agent: agent.id } : {}),
+          ...(sessionContext ? { context: sessionContext } : {}),
+        },
+      };
+    }
     const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
     if (isRemoteRepositoryPath(repositoryPath)) {
       return {
@@ -1901,7 +1962,6 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) 
       repositoryPath,
       source || launchOptions?.source,
     );
-    const agent = resolveWindowAgent(event.sender.id);
     if (!agent) {
       return { reason: AI_DISABLED_REASON, status: 'unavailable' };
     }
@@ -1933,6 +1993,7 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source, options) 
       }
 
       try {
+        assertWalkthroughHunkIdsResolve(input, state.files);
         return {
           status: 'ready',
           walkthrough: normalizeNarrativeWalkthrough(input, state.files, {
@@ -2150,6 +2211,11 @@ ipcMain.handle('codiff:submitPullRequestComment', async (event, request) => {
 ipcMain.handle('codiff:submitPullRequestReview', async (event, request) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
   return submitPullRequestReview(repositoryPath, request);
+});
+
+ipcMain.handle('codiff:setPullRequestFileViewed', async (event, request) => {
+  const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
+  return setPullRequestFileViewed(repositoryPath, request);
 });
 
 ipcMain.handle('codiff:getDiffSectionContent', async (event, request) => {

@@ -162,8 +162,8 @@ holds the repository.
    **Agent integration:** The launcher passes `CLAUDE_SESSION_ID` to Codiff in desktop mode and
    identifies shared walkthroughs as authored by Claude.
 
-   Codiff validates and repairs the document against the live diff, so anchors that drift
-   are pinned to a real section rather than dropped.
+   If a `hunkId` does not resolve, the command exits non-zero and prints the diff's real ids.
+   Fix the document and rerun.
 
 Emit walkthrough JSON only into the temporary file. In desktop walkthrough mode, do not
 summarize the conversation back to the user. In walkthrough share mode, respond with the URL

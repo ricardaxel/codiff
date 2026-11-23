@@ -4,6 +4,7 @@ import narrativeSchemaJson from '../../core/walkthrough/narrative-walkthrough.sc
 
 const require = createRequire(import.meta.url);
 const {
+  assertWalkthroughHunkIdsResolve,
   buildNarrativeWalkthroughPrompt,
   getNarrativeWalkthroughCacheKey,
   narrativeWalkthroughSchema,
@@ -11,6 +12,7 @@ const {
   readNarrativeWalkthrough,
   resolveNarrativeWalkthroughModel,
 } = require('../narrative-walkthrough.cjs') as {
+  assertWalkthroughHunkIdsResolve: (input: unknown, files: ReadonlyArray<unknown>) => void;
   buildNarrativeWalkthroughPrompt: (
     state: any,
     context?: unknown,
@@ -1360,6 +1362,20 @@ test('throws when no chapters have resolvable stops', () => {
   }));
 
   expect(() => normalizeNarrativeWalkthrough(input, files)).toThrow(/no chapters/i);
+});
+
+test('rejects a walkthrough when any stop or support hunk id is unresolved', () => {
+  expect(() => assertWalkthroughHunkIdsResolve(baseInput(), files)).not.toThrow();
+
+  const input = baseInput();
+  input.chapters[0].stops[1].hunkIds = ['src/__tests__/hunkNavigation.test.ts:.1'];
+  input.support[0].hunkIds = ['pnpm-lock.yaml:staged:h1', 'missing.ts:staged:h1'];
+
+  // Normalization would silently drop the stop, so the assertion is what surfaces it.
+  expect(normalizeNarrativeWalkthrough(input, files).chapters[0].stops).toHaveLength(1);
+  expect(() => assertWalkthroughHunkIdsResolve(input, files)).toThrow(
+    /^Unresolved hunk ids: src\/__tests__\/hunkNavigation\.test\.ts:\.1, missing\.ts:staged:h1\. This diff's hunk ids: src\/App\.tsx:staged:h1, /,
+  );
 });
 
 test('throws an explicit error for legacy v3 anchor walkthroughs', () => {

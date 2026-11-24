@@ -387,7 +387,10 @@ const run = async () => {
     process.stderr.write(`${updateNotice}\n`);
   }
 
-  const { default: electron } = await import('electron');
+  const { default: electronModule } = await import('electron');
+  // Under Electron's own Node (bin/codiff-host), `electron` resolves to Electron's built-in module
+  // instead of the npm package's binary path; the running binary is then Electron itself.
+  const electron = typeof electronModule === 'string' ? electronModule : process.execPath;
 
   const child = spawn(electron, [root], {
     detached: true,
